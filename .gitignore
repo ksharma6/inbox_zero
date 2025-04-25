@@ -1,3 +1,5 @@
 #json directory contains sensitive information
 json/*
 
+#sandbox
+notebooks/
