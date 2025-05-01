@@ -1,6 +1,9 @@
 #json directory contains sensitive information
 json/*
 
+#venv
+.venv/
+
 #sandbox
 notebooks/
 
