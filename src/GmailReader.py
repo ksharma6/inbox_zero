@@ -6,42 +6,15 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+from src.GmailAuthenticator import auth_user
 
 class GmailReader:
   """Class performs reading operations using the Gmail API
   """
-  def __init__(self, path, creds = None):
+  def __init__(self, path):
     self.path = path
-    self.creds = creds
-
-  def auth_user(self):
-    """_summary_
-
-    Args:
-        path (string): path to directory where user's gmail token.json file exists
-    """
-    creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists(self.path + "token.json"):
-      creds = Credentials.from_authorized_user_file(self.path + "token.json", SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-      if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-      else:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            self.path + "credentials.json", SCOPES
-        )
-        creds = flow.run_local_server(port=0)
-      # Save the credentials for the next run
-      with open(self.path + "token.json", "w") as token:
-        token.write(creds.to_json())
-
-      self.creds= creds
+    self.creds = auth_user(self.path)
+    print(self.creds)
 
   def read_labels(self):
     """Lists the user's Gmail labels
@@ -49,9 +22,6 @@ class GmailReader:
     Args:
         path (string): path to directory where user's gmail token.json file exists
     """
-    if self.creds is None:
-      self.auth_user()
-
     try:
       # Call the Gmail API
       service = build("gmail", "v1", credentials=self.creds)
@@ -70,4 +40,17 @@ class GmailReader:
       print(f"An error occurred: {error}")
 
   def read_emails(self):
+    service = build('gmail', 'v1', credentials=self.creds)
     
+    # List the user's messages
+    results = service.users().messages().list(userId='me', maxResults=10).execute()
+    messages = results.get('messages', [])
+
+    if not messages:
+        print('No messages found.')
+    else:
+        print('Messages:')
+        for message in messages:
+            msg = service.users().messages().get(userId='me', id=message['id']).execute()
+            print(f"Message ID: {message['id']}")
+            print(f"Snippet: {msg['snippet']}\n")
