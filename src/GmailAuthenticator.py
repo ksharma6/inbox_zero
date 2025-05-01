@@ -8,10 +8,11 @@ from google.auth.transport.requests import Request
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 def auth_user(path):
-    """Authenticate user and save credentials.json if not present in path.
+    """Authenticate user and save token.json if not present in path.
 
     Args:
-        path (string): path to directory where user's gmail token.json file exists
+        path (string): path to directory where user's gmail credentials.json file 
+        exists. credentials.json must be acquired through Google Cloud console.
     
     Returns:
         creds: Authenticated token from user
