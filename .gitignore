@@ -1,5 +1,6 @@
 #json directory contains sensitive information
-json/*
+tokens/*
+.dev
 
 #venv
 .venv/
