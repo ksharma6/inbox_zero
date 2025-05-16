@@ -1,9 +1,15 @@
 from openai import OpenAI
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv("/Users/ksharma6/Documents/projects/inbox_zero/tokens/.env")
+api_key = os.environ.get("MY_API_KEY")
+
 client = OpenAI()
 
 class Agent:
-    def __init__(self, api_key, model = "gpt-4.1",  name= "OpenAIAgent",
+    def __init__(self, api_key=api_key, model = "gpt-4.1",  name= "OpenAIAgent",
                  instructions = "", tools = None):
         """Initialize an agent with OpenAI API key and model
 
@@ -16,8 +22,9 @@ class Agent:
         self.api_key = api_key
         self.model = model
         self.name = name
-        self.instructions = instructions
-        self.tools = tools
+        self.instructions = instructions #specific instructions you want agent
+                                         #to follow
+        self.tools = tools #what api tools do you want agent to use
 
         self.assistant = client.beta.assistants.create(
             name = self.name,
@@ -27,6 +34,15 @@ class Agent:
         )
 
 
-    def get_response(self, prompt,role, temp = .7, max_tokens = 150):
+    def command(self, role, prompt, temp = .7, max_tokens = 150):
 
-        response = OpenAI.ChatC
+
+        response = client.responses.create(
+            model= self.model,
+            input=[{"role":role,
+                    "content":prompt,
+                    }],
+            tools = self.tools,
+            temperature=temp, 
+            max_tokens= max_tokens
+        )
