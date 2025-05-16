@@ -1,4 +1,5 @@
 import os.path
+import base64
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -51,7 +52,7 @@ class GmailReader:
     else:
         print('Messages:')
         for message in messages:
-            msg = service.users().messages().get(userId='me', id=message['id']).execute()
+            msg = service.users().messages().get(userId='me', id=message['id'], format = 'raw').execute()
+            raw_message = base64.urlsafe_b64decode(msg['raw']).decode('utf-8')
             print(f"Message ID: {message['id']}")
-            print(f"Message: {message['payload']}")
-            print(f"Snippet: {msg['snippet']}\n")
+            print(f"Raw Message:\n{raw_message}\n")
