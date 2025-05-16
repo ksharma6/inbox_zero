@@ -1,7 +1,10 @@
-import openai 
+from openai import OpenAI
+
+client = OpenAI()
 
 class Agent:
-    def __init__(self, api_key, model = "gpt-4.1", name= "OpenAIAgent"):
+    def __init__(self, api_key, model = "gpt-4.1",  name= "OpenAIAgent",
+                 instructions = "", tools = None):
         """Initialize an agent with OpenAI API key and model
 
         Args:
@@ -13,7 +16,17 @@ class Agent:
         self.api_key = api_key
         self.model = model
         self.name = name
+        self.instructions = instructions
+        self.tools = tools
+
+        self.assistant = client.beta.assistants.create(
+            name = self.name,
+            instructions= self.instructions,
+            tools= self.tools,
+            model= self.model
+        )
+
 
     def get_response(self, prompt,role, temp = .7, max_tokens = 150):
 
-        response = openai.ChatCompletion.create()
+        response = OpenAI.ChatC
