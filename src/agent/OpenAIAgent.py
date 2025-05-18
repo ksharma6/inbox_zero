@@ -1,10 +1,10 @@
 from openai import OpenAI
 
-import os
-from dotenv import load_dotenv
+from load_dotenv import load_dotenv_helper
 
-load_dotenv("/Users/ksharma6/Documents/projects/inbox_zero/tokens/.env")
-api_key = os.environ.get("MY_API_KEY")
+load_dotenv_helper()
+
+api_key = os.environ.get("MY_OPENAI_API_KEY")
 
 client = OpenAI()
 
