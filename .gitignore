@@ -1,13 +1,10 @@
-#json directory contains sensitive information
-tokens/*
-
-#venv
+#local files and API keys
+tokens/
 .venv/
-
-#sandbox
-notebooks/
+.env
 
 # Jupyter Notebook checkpoints
+notebooks/
 .ipynb_checkpoints
 
 # Byte-compiled / optimized / DLL files
