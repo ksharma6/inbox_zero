@@ -1,12 +1,14 @@
 from openai import OpenAI
 
-from load_dotenv import load_dotenv_helper
+import os
+
+from utils.load_dotenv import load_dotenv_helper
 
 load_dotenv_helper()
 
 api_key = os.environ.get("MY_OPENAI_API_KEY")
 
-client = OpenAI()
+client = OpenAI(api_key=api_key)
 
 class Agent:
     def __init__(self, api_key=api_key, model = "gpt-4.1",  name= "OpenAIAgent",
