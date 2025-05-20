@@ -7,7 +7,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from gmail.GmailAuthenticator import auth_user
+from src.gmail.GmailAuthenticator import auth_user
 
 class GmailReader:
   """Class performs reading operations using the Gmail API

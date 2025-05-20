@@ -2,7 +2,7 @@ from openai import OpenAI
 
 import os
 
-from utils.load_dotenv import load_dotenv_helper
+from src.utils.load_dotenv import load_dotenv_helper
 
 load_dotenv_helper()
 
