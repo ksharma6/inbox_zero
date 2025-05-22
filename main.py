@@ -2,7 +2,7 @@ import os
 
 from src.agent.OpenAIAgent import Agent
 from src.gmail.GmailReader import GmailReader
-from src.utils.load_dotenv import load_dotenv_helper
+from src.utils.load_env import load_dotenv_helper
 
 #load keys + paths
 load_dotenv_helper()
