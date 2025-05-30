@@ -1,5 +1,6 @@
 import base64
 from email.message import EmailMessage
+import mimetypes
 
 import google.auth
 from googleapiclient.discovery import build
@@ -19,7 +20,12 @@ class GmailWriter:
         self.token_path = token_path
         self.creds = auth_user(self.token_path)
 
-    def write_email_draft(self,sender:str, recipient:str, subject:str, message:str) -> dict:
+    def write_email_draft(self,
+                          sender:str, 
+                          recipient:str, 
+                          subject:str, 
+                          message:str,
+                          attachment_path = None) -> dict:
         service = build("gmail", "v1", credentials=self.creds)
 
         email=EmailMessage()
@@ -29,6 +35,16 @@ class GmailWriter:
         email["To"] = recipient
         email["From"] = sender
         email["Subject"] = subject
+
+        if attachment_path:
+            #guess the MIME type of the attachment
+            type_subtype, _ = mimetypes.guess_type(attachment_path)
+            main_type, sub_type = type_subtype.split('/')
+
+            with open(attachment_path, 'rb') as fp:
+                attachment_data = fp.read()
+            
+            email.add_attachment(attachment_data, main_type, sub_type)
 
         #encode message
         encoded_email = base64.urlsafe_b64encode(email.as_bytes()).decode()
@@ -41,7 +57,6 @@ class GmailWriter:
             .create(userId= "me", body = create_email)
             .execute()
         )
-
         return draft
 
 
