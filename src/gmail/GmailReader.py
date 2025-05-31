@@ -55,9 +55,9 @@ class GmailReader:
                 headers = payload.get("headers", [])
                 subject = self._get_header(headers, "Subject")
                 print("subject:", subject)
-                from_email = results._get_header(headers, "From")
-                to_email = results._get_header(headers, "To")
-                date_str = results._get_header(headers, "Date")
+                from_email = self._get_header(headers, "From")
+                to_email = self._get_header(headers, "To")
+                date_str = self._get_header(headers, "Date")
 
                 # get email body
                 body_plain, body_html = self._read_email_body(payload)
