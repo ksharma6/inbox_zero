@@ -53,12 +53,14 @@ class GmailReader:
                     continue
 
                 headers = payload.get("headers", [])
-                print("headers:", headers)
                 subject = self._get_header(headers, "Subject")
                 print("subject:", subject)
                 from_email = results._get_header(headers, "From")
                 to_email = results._get_header(headers, "To")
                 date_str = results._get_header(headers, "Date")
+
+                # get email body
+                body_plain, body_html = self._read_email_body(payload)
 
                 if subject:
                     formatted_emails.append(
@@ -68,9 +70,12 @@ class GmailReader:
                             "from": from_email,
                             "to": to_email,
                             "date": date_str,
-                            #'body'
+                            "body_plain": body_plain,
+                            "body_html": body_html,
                         }
                     )
+
+        return formatted_emails
 
     def _get_header(self, headers: list, name: str):
         """
@@ -113,21 +118,20 @@ class GmailReader:
                 if not data:
                     continue
 
+                # check if partis a container type and use recursion to find actual content
                 if (
                     mime_type == "multipart/alternative"
                     or mime_type == "multipart/related"
                     or mime_type == "multipart/mixed"
                 ):
-                    # Recurse into nested parts
+
                     nested_plain, nested_html = self._get_email_body(part)
-                    if (
-                        nested_plain and not body_plain
-                    ):  # Take the first plain text found
+                    if nested_plain and not body_plain:
                         body_plain = nested_plain
-                    if nested_html and not body_html:  # Take the first HTML found
+                    if nested_html and not body_html:
                         body_html = nested_html
                 elif mime_type == "text/plain":
-                    if not body_plain:  # Take the first plain text found
+                    if not body_plain:
                         decoded_data = base64.urlsafe_b64decode(
                             data.encode("UTF-8")
                         ).decode("UTF-8", errors="replace")
@@ -138,3 +142,17 @@ class GmailReader:
                             data.encode("UTF-8")
                         ).decode("UTF-8", errors="replace")
                         body_html = decoded_data
+        # body is directly in payload
+        elif "body" in payload and "data" in payload["body"]:
+            data = payload["body"]["data"]
+            mime_type = payload.get("mimeType")
+            if data:
+                decoded_data = base64.urlsafe_b64decode(data.encode("UTF-8")).decode(
+                    "UTF-8", errors="replace"
+                )
+                if mime_type == "text/plain":
+                    body_plain = decoded_data
+                elif mime_type == "text/html":
+                    body_html = decoded_data
+
+        return body_plain, body_html
