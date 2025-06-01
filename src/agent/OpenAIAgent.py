@@ -1,50 +1,130 @@
+import os
+import json
+from typing import Optional
+
 from openai import OpenAI
 
-import os
+from src.gmail.GmailWriter import GmailWriter
 
-from src.utils.load_env import load_dotenv_helper
-
-load_dotenv_helper()
-
-api_key = os.environ.get("MY_OPENAI_API_KEY")
-
-client = OpenAI(api_key=api_key)
 
 class Agent:
-    def __init__(self, api_key=api_key, model = "gpt-4.1",  name= "OpenAIAgent",
-                 instructions = "", tools = None):
-        """Initialize an agent with OpenAI API key and model
+    def __init__(
+        self, api_key: str, model="gpt-4.1", available_tools: Optional[dict] = None
+    ):
 
-        Args:
-            api_key (string): API key from OpenAI API platform
-            model (str, optional): OpenAI model you would like agent to use. 
-            Defaults to "gpt-4.1".
-            name (str, optional): Name of agent. Defaults to "OpenAIAgent".
-        """
-        self.api_key = api_key
+        self.client = OpenAI(api_key=api_key)
         self.model = model
-        self.name = name
-        self.instructions = instructions #specific instructions you want agent
-                                         #to follow
-        self.tools = tools #what api tools do you want agent to use
+        self.available_tools = available_tools
+        self.function_map = {}  # map function names to methods
+        self.llm_tool_schema = None
+        self.user_prompt = None
 
-        self.assistant = client.beta.assistants.create(
-            name = self.name,
-            instructions= self.instructions,
-            tools= self.tools,
-            model= self.model
+        for tool_name, instance in self.available_tools.items():
+            # Crude way to map; you'd make this more robust
+            if isinstance(instance, GmailWriter):
+                self.function_map["send_email"] = instance.send_email
+
+    def process_request(
+        self,
+        user_prompt: str,
+        llm_tool_schema: list,
+        system_message: Optional[str] = None,
+    ):
+        self.llm_tool_schema = llm_tool_schema
+        self.user_prompt = user_prompt
+
+        messages = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": user_prompt})
+
+        print("Prompt received: ", user_prompt)
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            tools=llm_tool_schema,
+            tool_choice="auto",
         )
+        response_message = response.choices[0].message
+        tool_calls = response_message.tool_calls
 
+        if tool_calls:
+            print("Agent decided to use tool.")
+            # add agent's reply
+            messages.append(response_message)
 
-    def command(self, role, prompt, temp = .7, max_tokens = 150):
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                function_args_str = tool_call.function.arguments
 
+                print(f"Function to call: {function_name}")
+                print(f"Function arguments: {function_args_str}")
 
-        response = client.responses.create(
-            model= self.model,
-            input=[{"role":role,
-                    "content":prompt,
-                    }],
-            tools = self.tools,
-            temperature=temp, 
-            max_tokens= max_tokens
+                function_to_call = self.function_map.get(function_name)
+
+                if function_to_call:
+                    try:
+                        function_args = json.loads(function_args_str)
+                        # Handle missing keys in function_args if they are optional
+                        # For example, if 'email_id' is optional for read_email:
+                        # result = function_to_call(**function_args)
+                        # For now, assuming args match perfectly or are handled by the tool
+                        result = function_to_call(**function_args)
+                    except TypeError as e:
+                        print(
+                            f"   ⚠️ Error calling {function_name} with args {function_args_str}: {e}"
+                        )
+                        result = f"Error: Could not call {function_name} due to argument mismatch."
+                    except json.JSONDecodeError:
+                        print(
+                            f"   ⚠️ Error decoding arguments for {function_name}. Trying to call without arguments or with defaults."
+                        )
+                        # Attempt to call with no args if appropriate, or handle default
+                        if (
+                            function_name == "read_email"
+                        ):  # Example: read_email might default
+                            result = function_to_call()
+                        else:
+                            result = f"Error: Invalid arguments for {function_name}."
+
+                    print(f"   📩 Tool '{function_name}' executed. Result: {result}")
+                    messages.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": str(result),  # Ensure content is a string
+                        }
+                    )
+                else:
+                    print(f"   ⚠️ Unknown function '{function_name}' requested by LLM.")
+                    messages.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": f"Error: Function '{function_name}' is not available.",
+                        }
+                    )
+
+            print("\n🤖 Orchestrator processing tool result... (Second call to OpenAI)")
+            second_response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo", messages=messages
+            )
+            final_response = second_response.choices[0].message.content
+            print(f"\n🤖 Orchestrator final response:\n{final_response}")
+            return final_response
+        else:
+            final_response = response_message.content
+            print(
+                f"\n🤖 Orchestrator direct response (no tool used):\n{final_response}"
+            )
+            return final_response
+
+    def _handle_email_writing_task(self):
+        print("\n--- Starting Email Writing Task ---")
+        system_prompt = "You are an assistant that helps users write and send emails. Use 'send_email' or 'draft_email' as appropriate."
+        return self.process_request(
+            self.user_prompt, self.llm_tool_schema, system_message=system_prompt
         )
