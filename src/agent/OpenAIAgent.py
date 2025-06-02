@@ -11,7 +11,15 @@ class Agent:
     def __init__(
         self, api_key: str, model="gpt-4.1", available_tools: Optional[dict] = None
     ):
+        """Initializes the Agent
 
+        Args:
+            api_key (str): The API key for authenticating with the OpenAI API.
+            model (str, optional): OpenAI model to be used. Defaults to "gpt-4.1".
+            available_tools (Optional[dict], optional): A dictionary of tools
+                that the agent can use. Keys are tool names and values are
+                tool instances. Defaults to None.
+        """
         self.client = OpenAI(api_key=api_key)
         self.model = model
         self.available_tools = available_tools
@@ -30,6 +38,20 @@ class Agent:
         llm_tool_schema: list,
         system_message: Optional[str] = None,
     ):
+        """Processes user's request by interacting with OpenAI model.
+
+        Args:
+            user_prompt (str): Prompt from the user.
+            llm_tool_schema (list): A list of tool schemas that the LLM can
+                choose to call.
+            system_message (Optional[str], optional): An optional system-level
+                instruction to guide the LLM's behavior (e.g., persona,
+                tone, specific rules). For example: "You are a helpful AI agent".
+                Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
         self.llm_tool_schema = llm_tool_schema
         self.user_prompt = user_prompt
 
@@ -64,21 +86,18 @@ class Agent:
                 function_to_call = self.function_map.get(function_name)
 
                 if function_to_call:
+                    # Handle missing keys in function_args if they are optional
                     try:
                         function_args = json.loads(function_args_str)
-                        # Handle missing keys in function_args if they are optional
-                        # For example, if 'email_id' is optional for read_email:
-                        # result = function_to_call(**function_args)
-                        # For now, assuming args match perfectly or are handled by the tool
                         result = function_to_call(**function_args)
                     except TypeError as e:
                         print(
-                            f"   ⚠️ Error calling {function_name} with args {function_args_str}: {e}"
+                            f"Error calling {function_name} with args {function_args_str}: {e}"
                         )
                         result = f"Error: Could not call {function_name} due to argument mismatch."
                     except json.JSONDecodeError:
                         print(
-                            f"   ⚠️ Error decoding arguments for {function_name}. Trying to call without arguments or with defaults."
+                            f"Error decoding arguments for {function_name}. Trying to call without arguments or with defaults."
                         )
                         # Attempt to call with no args if appropriate, or handle default
                         if (
@@ -88,7 +107,7 @@ class Agent:
                         else:
                             result = f"Error: Invalid arguments for {function_name}."
 
-                    print(f"   📩 Tool '{function_name}' executed. Result: {result}")
+                    print(f"Tool '{function_name}' executed. Result: {result}")
                     messages.append(
                         {
                             "tool_call_id": tool_call.id,
@@ -98,7 +117,7 @@ class Agent:
                         }
                     )
                 else:
-                    print(f"   ⚠️ Unknown function '{function_name}' requested by LLM.")
+                    print(f"Unknown function '{function_name}' requested by LLM.")
                     messages.append(
                         {
                             "tool_call_id": tool_call.id,
@@ -108,23 +127,14 @@ class Agent:
                         }
                     )
 
-            print("\n🤖 Orchestrator processing tool result... (Second call to OpenAI)")
+            print("\nAgent processing tool result... (Second call to OpenAI)")
             second_response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo", messages=messages
+                model=self.model, messages=messages
             )
             final_response = second_response.choices[0].message.content
-            print(f"\n🤖 Orchestrator final response:\n{final_response}")
+            print(f"\nAgent final response:\n{final_response}")
             return final_response
         else:
             final_response = response_message.content
-            print(
-                f"\n🤖 Orchestrator direct response (no tool used):\n{final_response}"
-            )
+            print(f"\nAgent direct response (no tool used):\n{final_response}")
             return final_response
-
-    def _handle_email_writing_task(self):
-        print("\n--- Starting Email Writing Task ---")
-        system_prompt = "You are an assistant that helps users write and send emails. Use 'send_email' or 'draft_email' as appropriate."
-        return self.process_request(
-            self.user_prompt, self.llm_tool_schema, system_message=system_prompt
-        )
