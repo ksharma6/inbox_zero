@@ -1,6 +1,8 @@
 import os.path
 import base64
 
+from bs4 import BeautifulSoup
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -18,7 +20,7 @@ class GmailReader:
         self.creds = auth_user(self.path)
         print(self.creds)
 
-    def read_emails(self, count=5):
+    def read_email(self, count=5):
         formatted_emails = []
 
         # init gmail service object
@@ -59,8 +61,12 @@ class GmailReader:
                 to_email = self._get_header(headers, "To")
                 date_str = self._get_header(headers, "Date")
 
-                # get email body
-                body_plain, body_html = self._read_email_body(payload)
+                # get raw email body
+                body_plain_raw, body_html_raw = self._read_email_body(payload)
+
+                # parse email bodies
+                body_plain_parsed = self._html_parser(body_plain_raw)
+                body_html_parsed = self._html_parser(body_html_raw)
 
                 if subject:
                     formatted_emails.append(
@@ -70,8 +76,8 @@ class GmailReader:
                             "from": from_email,
                             "to": to_email,
                             "date": date_str,
-                            "body_plain": body_plain,
-                            "body_html": body_html,
+                            "body_plain": body_plain_parsed,
+                            "body_html": body_html_parsed,
                         }
                     )
 
@@ -156,3 +162,30 @@ class GmailReader:
                     body_html = decoded_data
 
         return body_plain, body_html
+
+    def _html_parser(self, data: str):
+        """
+        Removes HTML tags from a string using BS4
+
+        Args:
+            data (str): string you would like parser applied to
+
+        Returns:
+            cleaned_data (str): parsed input data string
+        """
+        if not data or data == "":
+            print("string not found")
+            return ""
+
+        soup = BeautifulSoup(data, "html.parser")
+
+        # remove script/style tags
+        for tag in soup(["script", "style"]):
+            tag.decompose()
+
+        # aggregate remaining text
+        cleaned_data = soup.get_text(separator=" ", strip=True)
+
+        return cleaned_data
+
+    # def _plain_text_parser(self, data:str):
