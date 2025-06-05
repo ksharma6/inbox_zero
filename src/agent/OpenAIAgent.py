@@ -5,6 +5,7 @@ from typing import Optional
 from openai import OpenAI
 
 from src.gmail.GmailWriter import GmailWriter
+from src.gmail.GmailReader import GmailReader
 
 
 class Agent:
@@ -28,9 +29,10 @@ class Agent:
         self.user_prompt = None
 
         for tool_name, instance in self.available_tools.items():
-            # Crude way to map; you'd make this more robust
             if isinstance(instance, GmailWriter):
                 self.function_map["send_email"] = instance.send_email
+            if isinstance(instance, GmailReader):
+                self.function_map["read_email"] = instance.read_email
 
     def process_request(
         self,
