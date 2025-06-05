@@ -187,5 +187,3 @@ class GmailReader:
         cleaned_data = soup.get_text(separator=" ", strip=True)
 
         return cleaned_data
-
-    # def _plain_text_parser(self, data:str):
