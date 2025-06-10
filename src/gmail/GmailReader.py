@@ -61,12 +61,16 @@ class GmailReader:
                 to_email = self._get_header(headers, "To")
                 date_str = self._get_header(headers, "Date")
 
+                # get email body (forwarded email)
+                raw_body = self._get_email_body(payload)
+                body = self._html_parser(raw_body)
+
                 # get raw email body
-                body_plain_raw, body_html_raw = self._read_email_body(payload)
+                # body_plain_raw, body_html_raw = self._get_email_body(payload)
 
                 # parse email bodies
-                body_plain_parsed = self._html_parser(body_plain_raw)
-                body_html_parsed = self._html_parser(body_html_raw)
+                # body_plain_parsed = self._html_parser(body_plain_raw)
+                # body_html_parsed = self._html_parser(body_html_raw)
 
                 if subject:
                     formatted_emails.append(
@@ -76,8 +80,9 @@ class GmailReader:
                             "from": from_email,
                             "to": to_email,
                             "date": date_str,
-                            "body_plain": body_plain_parsed,
-                            "body_html": body_html_parsed,
+                            "body": body,
+                            # "body_plain": body_plain_parsed,
+                            # "body_html": body_html_parsed,
                         }
                     )
 
@@ -98,70 +103,6 @@ class GmailReader:
                     return header.get("value")
 
         return None
-
-    def _read_email_body(self, payload: dict):
-        """
-        Extracts email body from email message payload
-
-        Args:
-            payload (dict): payload received from gmail service object
-        """
-
-        body_plain = None
-        body_html = None
-
-        if "parts" in payload:
-            for part in payload["parts"]:
-                mime_type = part.get("mimeType")
-                part_body = part.get("body")
-
-                # check for part containers with no direct body
-                if not part_body:
-                    continue
-
-                data = part_body.get("data")
-                # check for empty data
-                if not data:
-                    continue
-
-                # check if partis a container type and use recursion to find actual content
-                if (
-                    mime_type == "multipart/alternative"
-                    or mime_type == "multipart/related"
-                    or mime_type == "multipart/mixed"
-                ):
-
-                    nested_plain, nested_html = self._get_email_body(part)
-                    if nested_plain and not body_plain:
-                        body_plain = nested_plain
-                    if nested_html and not body_html:
-                        body_html = nested_html
-                elif mime_type == "text/plain":
-                    if not body_plain:
-                        decoded_data = base64.urlsafe_b64decode(
-                            data.encode("UTF-8")
-                        ).decode("UTF-8", errors="replace")
-                        body_plain = decoded_data
-                elif mime_type == "text/html":
-                    if not body_html:  # Take the first HTML found
-                        decoded_data = base64.urlsafe_b64decode(
-                            data.encode("UTF-8")
-                        ).decode("UTF-8", errors="replace")
-                        body_html = decoded_data
-        # body is directly in payload
-        elif "body" in payload and "data" in payload["body"]:
-            data = payload["body"]["data"]
-            mime_type = payload.get("mimeType")
-            if data:
-                decoded_data = base64.urlsafe_b64decode(data.encode("UTF-8")).decode(
-                    "UTF-8", errors="replace"
-                )
-                if mime_type == "text/plain":
-                    body_plain = decoded_data
-                elif mime_type == "text/html":
-                    body_html = decoded_data
-
-        return body_plain, body_html
 
     def _html_parser(self, data: str):
         """
@@ -187,3 +128,33 @@ class GmailReader:
         cleaned_data = soup.get_text(separator=" ", strip=True)
 
         return cleaned_data
+
+    def _get_email_body(self, payload):
+        """
+        Helper to extract email body including multipart messages (e.g. forwarded emails).
+
+        Args:
+            payload (dict): payload received from gmail service object
+
+        Returns:
+            body (string): concatenated string of all readable parts of payload.
+        """
+
+        body = ""
+
+        if "parts" in payload:
+            for part in payload["parts"]:
+                # recursive call for each part in payload
+                body += self._get_email_body(part)
+        # base case - part w/ body
+        elif "body" in payload and "data" in payload["body"]:
+            part_body = payload["body"]["data"]
+
+            if payload.get("mimeType") == "text/plain":
+                body += base64.urlsafe_b64decode(part_body).decode("utf-8")
+            elif payload.get("mimeType") == "text/html":
+                html_content = base64.urlsafe_b64decode(part_body).decode("utf-8")
+                soup = BeautifulSoup(html_content, "html.parser")
+                body += soup.get_text()
+
+        return body
