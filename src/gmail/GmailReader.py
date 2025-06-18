@@ -65,13 +65,6 @@ class GmailReader:
                 raw_body = self._get_email_body(payload)
                 body = self._html_parser(raw_body)
 
-                # get raw email body
-                # body_plain_raw, body_html_raw = self._get_email_body(payload)
-
-                # parse email bodies
-                # body_plain_parsed = self._html_parser(body_plain_raw)
-                # body_html_parsed = self._html_parser(body_html_raw)
-
                 if subject:
                     formatted_emails.append(
                         {
@@ -81,8 +74,6 @@ class GmailReader:
                             "to": to_email,
                             "date": date_str,
                             "body": body,
-                            # "body_plain": body_plain_parsed,
-                            # "body_html": body_html_parsed,
                         }
                     )
 
