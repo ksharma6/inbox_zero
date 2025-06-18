@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import base64
 from email.message import EmailMessage
 import mimetypes
@@ -8,6 +9,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from src.gmail.GmailAuthenticator import auth_user
+from src.models.gmail import GmailWriterSchema
 
 
 class GmailWriter:
@@ -22,35 +24,28 @@ class GmailWriter:
         self.token_path = token_path
         self.creds = auth_user(self.token_path)
 
-    def send_email(
-        self,
-        sender: str,
-        recipient: str,
-        subject: str,
-        message: str,
-        attachment_path=None,
-    ) -> dict:
+    def send_email(self, schema: GmailWriterSchema) -> Optional[dict]:
         try:
             service = build("gmail", "v1", credentials=self.creds)
 
             email = EmailMessage()
 
-            email.set_content(message)
+            email.set_content(schema.message)
 
-            email["To"] = recipient
-            email["From"] = sender
-            email["Subject"] = subject
+            email["To"] = schema.recipient
+            email["From"] = schema.sender
+            email["Subject"] = schema.subject
 
-            if attachment_path:
+            if schema.attachment_path:
                 # guess the MIME type of the attachment
-                type_subtype, _ = mimetypes.guess_type(attachment_path)
+                type_subtype, _ = mimetypes.guess_type(schema.attachment_path)
                 main_type, sub_type = type_subtype.split("/")
 
                 # get filename
-                filename = os.path.basename(attachment_path)
+                filename = os.path.basename(schema.attachment_path)
                 print(filename)
 
-                with open(attachment_path, "rb") as fp:
+                with open(schema.attachment_path, "rb") as fp:
                     email.add_attachment(
                         fp.read(),
                         maintype=main_type,
@@ -76,5 +71,5 @@ class GmailWriter:
             print(f"An error occurred: {error}")
             send_message = None
 
-        print("Message successfully sent to: " + recipient)
+        print("Message successfully sent to: " + schema.recipient)
         return send_message
