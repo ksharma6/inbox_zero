@@ -6,12 +6,11 @@ from openai import OpenAI
 
 from src.gmail.GmailWriter import GmailWriter
 from src.gmail.GmailReader import GmailReader
+from src.models.agent import AgentSchema, ProcessRequestSchema
 
 
 class Agent:
-    def __init__(
-        self, api_key: str, model="gpt-4.1", available_tools: Optional[dict] = None
-    ):
+    def __init__(self, schema: AgentSchema):
         """Initializes the Agent
 
         Args:
@@ -21,12 +20,10 @@ class Agent:
                 that the agent can use. Keys are tool names and values are
                 tool instances. Defaults to None.
         """
-        self.client = OpenAI(api_key=api_key)
-        self.model = model
-        self.available_tools = available_tools
+        self.client = OpenAI(api_key=schema.api_key)
+        self.model = schema.model
+        self.available_tools = schema.available_tools
         self.function_map = {}  # map function names to methods
-        self.llm_tool_schema = None
-        self.user_prompt = None
 
         for tool_name, instance in self.available_tools.items():
             if isinstance(instance, GmailWriter):
@@ -34,12 +31,7 @@ class Agent:
             if isinstance(instance, GmailReader):
                 self.function_map["read_email"] = instance.read_email
 
-    def process_request(
-        self,
-        user_prompt: str,
-        llm_tool_schema: list,
-        system_message: Optional[str] = None,
-    ):
+    def process_request(self, schema: ProcessRequestSchema):
         """Processes user's request by interacting with OpenAI model.
 
         Args:
@@ -54,20 +46,20 @@ class Agent:
         Returns:
             _type_: _description_
         """
-        self.llm_tool_schema = llm_tool_schema
-        self.user_prompt = user_prompt
+        self.llm_tool_schema = schema.llm_tool_schema
+        self.user_prompt = schema.user_prompt
 
         messages = []
-        if system_message:
-            messages.append({"role": "system", "content": system_message})
-        messages.append({"role": "user", "content": user_prompt})
+        if schema.system_message:
+            messages.append({"role": "system", "content": schema.system_message})
+        messages.append({"role": "user", "content": schema.user_prompt})
 
-        print("Prompt received: ", user_prompt)
+        print("Prompt received: ", schema.user_prompt)
 
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            tools=llm_tool_schema,
+            tools=self.llm_tool_schema,
             tool_choice="auto",
         )
         response_message = response.choices[0].message
