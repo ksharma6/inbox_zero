@@ -2,6 +2,8 @@ from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, Field
 
+from src.models.gmail import ToolFunction
+
 
 class AgentSchema(BaseModel):
     api_key: str = Field(
@@ -19,8 +21,10 @@ class AgentSchema(BaseModel):
 
 
 class ProcessRequestSchema(BaseModel):
-    llm_tool_schema: List[Dict[str, Any]]
     user_prompt: str = Field(..., description="Prompt from user")
+    llm_tool_schema: ToolFunction = Field(
+        ..., description="Pydantic LLM Schema for tools"
+    )
     system_message: Optional[str] = Field(
         None,
         description="An optional system-level"

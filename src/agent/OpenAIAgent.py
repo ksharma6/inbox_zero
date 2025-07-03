@@ -56,10 +56,17 @@ class Agent:
 
         print("Prompt received: ", schema.user_prompt)
 
+        tools_payload = [
+            {
+                "type": "function",
+                "function": self.llm_tool_schema.model_dump(),  # Convert ToolFunction to dict
+            }
+        ]
+
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            tools=self.llm_tool_schema,
+            tools=tools_payload,
             tool_choice="auto",
         )
         response_message = response.choices[0].message
