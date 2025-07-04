@@ -22,10 +22,6 @@ class ParamProperties(BaseModel):
     type: Literal["string", "integer", "number", "boolean", "array", "object"]
     description: Optional[str] = None
 
-    properties: Optional[Dict[str, "ParamProperties"]] = None  # For nested objects
-    required: Optional[List[str]] = None  # For nested objects
-    items: Optional[Dict[str, Any]] = None  # For array types
-
 
 class ToolParams(BaseModel):
     # define overall schema for all params tool function accepts
@@ -38,7 +34,6 @@ class ToolParams(BaseModel):
     )
 
 
-
 class ToolFunction(BaseModel):
     # define the details of a specific function to be called by llm
     name: str = Field(..., description="The name of the function to call.")
@@ -49,7 +44,6 @@ class ToolFunction(BaseModel):
         ...,
         description="The parameters the function accepts, described as a JSON Schema object.",
     )
-
 
 
 class LLMToolSchema(BaseModel):
