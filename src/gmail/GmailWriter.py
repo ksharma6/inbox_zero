@@ -8,7 +8,6 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from src.gmail.GmailAuthenticator import auth_user
-from src.models.gmail import GmailWriterSchema
 
 
 class GmailWriter:

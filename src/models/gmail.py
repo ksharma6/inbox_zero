@@ -1,20 +1,23 @@
-from typing import Optional
-
-from pydantic import BaseModel, Field
-
-from typing import Dict, List, Literal, Optional
+from src.models.toolfunction import ToolFunction, ToolParams, ParamProperties
 
 
 class GmailToolFunction:
+    """
+    Defines TooFunction schema for sending emails
+    """
+
     @staticmethod
     def generate_send_email_schema() -> ToolFunction:
+        """
+        Returns Pydantic ToolFunction for `GmailWriter.send_email()`
+        """
 
         return ToolFunction(
-            name="send_email",  # Name is "send_email"
+            name="send_email",
             description="Sends an email to a recipient with a subject and body.",  # Description matches
             parameters=ToolParams(
-                type="object",  # Type is "object"
-                properties={  # Define the properties
+                type="object",
+                properties={
                     "sender": ParamProperties(
                         type="string", description="The sender's email address."
                     ),
@@ -36,6 +39,6 @@ class GmailToolFunction:
                     "recipient",
                     "subject",
                     "message",
-                ],  # Adjusted to match properties
+                ],
             ),
         )
