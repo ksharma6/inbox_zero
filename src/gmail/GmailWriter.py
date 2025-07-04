@@ -4,7 +4,6 @@ import base64
 from email.message import EmailMessage
 import mimetypes
 
-import google.auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -24,28 +23,35 @@ class GmailWriter:
         self.token_path = token_path
         self.creds = auth_user(self.token_path)
 
-    def send_email(self, schema: GmailWriterSchema) -> Optional[dict]:
+    def send_email(
+        self,
+        sender: str,
+        recipient: str,
+        subject: str,
+        message: str,
+        attachment_path: Optional[str] = None,
+    ) -> Optional[dict]:
         try:
             service = build("gmail", "v1", credentials=self.creds)
 
             email = EmailMessage()
 
-            email.set_content(schema.message)
+            email.set_content(message)
 
-            email["To"] = schema.recipient
-            email["From"] = schema.sender
-            email["Subject"] = schema.subject
+            email["To"] = recipient
+            email["From"] = sender
+            email["Subject"] = subject
 
-            if schema.attachment_path:
+            if attachment_path:
                 # guess the MIME type of the attachment
-                type_subtype, _ = mimetypes.guess_type(schema.attachment_path)
+                type_subtype, _ = mimetypes.guess_type(attachment_path)
                 main_type, sub_type = type_subtype.split("/")
 
                 # get filename
-                filename = os.path.basename(schema.attachment_path)
+                filename = os.path.basename(attachment_path)
                 print(filename)
 
-                with open(schema.attachment_path, "rb") as fp:
+                with open(attachment_path, "rb") as fp:
                     email.add_attachment(
                         fp.read(),
                         maintype=main_type,
@@ -71,5 +77,5 @@ class GmailWriter:
             print(f"An error occurred: {error}")
             send_message = None
 
-        print("Message successfully sent to: " + schema.recipient)
+        print("Message successfully sent to: " + recipient)
         return send_message
