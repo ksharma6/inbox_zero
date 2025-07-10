@@ -1,13 +1,8 @@
-import os.path
 import base64
 
 from bs4 import BeautifulSoup
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
 from src.gmail.GmailAuthenticator import auth_user
 
@@ -18,17 +13,17 @@ class GmailReader:
     def __init__(self, path):
         self.path = path
         self.creds = auth_user(self.path)
-        print(self.creds)
+        self.service = build("gmail", "v1", credentials=self.creds)
 
     def read_email(self, count=5):
         formatted_emails = []
 
-        # init gmail service object
-        service = build("gmail", "v1", credentials=self.creds)
-
         # List the user's messages
         results = (
-            service.users().messages().list(userId="me", maxResults=count).execute()
+            self.service.users()
+            .messages()
+            .list(userId="me", maxResults=count)
+            .execute()
         )
 
         messages = results.get("messages", [])
@@ -42,7 +37,7 @@ class GmailReader:
                 message_id = message["id"]
 
                 message_detail = (
-                    service.users()
+                    self.service.users()
                     .messages()
                     .get(userId="me", id=message_id, format="full")
                     .execute()
