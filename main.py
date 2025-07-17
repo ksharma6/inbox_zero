@@ -1,5 +1,4 @@
 import os
-import json
 
 from email import message_from_bytes
 from slack_bolt import App
