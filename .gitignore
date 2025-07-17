@@ -2,6 +2,7 @@
 tokens/
 .venv/
 .env
+docdrafts/
 
 # Jupyter Notebook checkpoints
 notebooks/
