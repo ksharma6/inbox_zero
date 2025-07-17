@@ -147,11 +147,11 @@ class DraftApprovalHandler:
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "✏️ Edit Draft",
+                            "text": "💾 Save Draft",
                             "emoji": True,
                         },
-                        "value": f"edit_{draft_id}",
-                        "action_id": "edit_draft",
+                        "value": f"save_{draft_id}",
+                        "action_id": "save_draft",
                     },
                 ],
             },
@@ -208,8 +208,8 @@ class DraftApprovalHandler:
                 self._handle_approve(draft_id, user_id, say)
             elif action_type == "reject":
                 self._handle_reject(draft_id, user_id, say)
-            elif action_type == "edit":
-                self._handle_edit(draft_id, user_id, say)
+            elif action_type == "save":
+                self._handle_save(draft_id, user_id, say)
             else:
                 say(text="❌ Unknown action.")
 
@@ -269,36 +269,22 @@ class DraftApprovalHandler:
             print(f"Error rejecting draft: {e}")
             say(text="❌ An error occurred while rejecting the draft.")
 
-    def _handle_edit(self, draft_id: str, user_id: str, say: Say) -> None:
-        """Handle draft edit request."""
+    def _handle_save(self, draft_id: str, user_id: str, say: Say) -> None:
+        """Handle draft save request."""
         try:
             draft_data = self.pending_drafts[draft_id]
-            decoded_draft = draft_data["decoded_draft"]
+            draft = draft_data["draft"]
+            self.gmail_writer.save_draft(draft)
 
-            # Send edit instructions
-            edit_text = f"✏️ *Edit Draft Request*\n\n"
-            edit_text += (
-                f"To edit this draft, please provide the updated information:\n"
-            )
-            edit_text += (
-                f"• Current recipient: {decoded_draft.get('recipient', 'N/A')}\n"
-            )
-            edit_text += f"• Current subject: {decoded_draft.get('subject', 'N/A')}\n"
-            edit_text += f"• Current body: {decoded_draft.get('body', 'N/A')}\n\n"
-            edit_text += (
-                f"Reply to this message with your changes, or create a new draft."
-            )
+            # Update the original message
+            self._update_original_message(draft_id, "✅ *SAVED*", "success")
 
-            say(text=edit_text)
-
-            # Update status
-            draft_data["status"] = "edit_requested"
-            draft_data["edit_requested_by"] = user_id
-            draft_data["edit_requested_at"] = datetime.now()
+            # Send confirmation
+            say(text="✅ Email draft saved successfully.")
 
         except Exception as e:
-            print(f"Error handling edit request: {e}")
-            say(text="❌ An error occurred while processing edit request.")
+            print(f"Error handling save request: {e}")
+            say(text="❌ An error occurred while processing save request.")
 
     def _update_original_message(
         self, draft_id: str, status_text: str, color: str
@@ -332,34 +318,3 @@ class DraftApprovalHandler:
             del self.pending_drafts[draft_id]
         if draft_id in self.draft_timeouts:
             del self.draft_timeouts[draft_id]
-
-    def cleanup_expired_drafts(self) -> None:
-        """Remove expired drafts from storage."""
-        current_time = datetime.now()
-        expired_drafts = [
-            draft_id
-            for draft_id, expiry_time in self.draft_timeouts.items()
-            if current_time > expiry_time
-        ]
-
-        for draft_id in expired_drafts:
-            self._cleanup_draft(draft_id)
-            print(f"Cleaned up expired draft: {draft_id}")
-
-    def get_draft_status(self, draft_id: str) -> Optional[Dict]:
-        """Get the status of a specific draft."""
-        if draft_id in self.pending_drafts:
-            return self.pending_drafts[draft_id]
-        return None
-
-    def list_pending_drafts(self) -> Dict:
-        """List all pending drafts."""
-        return {
-            draft_id: {
-                "status": data["status"],
-                "created_at": data["created_at"],
-                "recipient": data["decoded_draft"].get("recipient"),
-                "subject": data["decoded_draft"].get("subject"),
-            }
-            for draft_id, data in self.pending_drafts.items()
-        }
