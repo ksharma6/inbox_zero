@@ -4,7 +4,9 @@ import base64
 import mimetypes
 
 from email.message import EmailMessage
-from email import message_from_bytes
+from email.parser import BytesParser
+from email import message_from_bytes, policy
+from email.policy import default
 
 
 from googleapiclient.discovery import build
@@ -34,6 +36,19 @@ class GmailWriter:
         message: str,
         attachment_path: Optional[str] = None,
     ) -> Optional[dict]:
+        """
+        Create a draft email message.
+
+        Args:
+            sender (str): The email address of the sender.
+            recipient (str): The email address of the recipient.
+            subject (str): The subject of the email.
+            message (str): The body of the email.
+            attachment_path (Optional[str], optional): The path to the attachment. Defaults to None.
+
+        Returns:
+            Optional[dict]: The draft email message.
+        """
         try:
 
             draft = EmailMessage()
@@ -47,7 +62,11 @@ class GmailWriter:
             if attachment_path:
                 # guess the MIME type of the attachment
                 type_subtype, _ = mimetypes.guess_type(attachment_path)
-                main_type, sub_type = type_subtype.split("/")
+                if type_subtype is None:
+                    # Default to application/octet-stream if type cannot be guessed
+                    main_type, sub_type = "application", "octet-stream"
+                else:
+                    main_type, sub_type = type_subtype.split("/")
 
                 # get filename
                 filename = os.path.basename(attachment_path)
@@ -72,9 +91,8 @@ class GmailWriter:
             return None
 
     def send_draft_slack(self, draft):
-        # send email draft over slack to user to approve
-        msg = self._draft_parser_slack(draft)
-        return msg
+
+        return self._email_message_decoder(draft)
 
     def send_draft(self, draft):
         # send email draft
@@ -167,6 +185,30 @@ class GmailWriter:
             print(f"An error occurred while fetching unread messages: {error}")
             return None
 
+    def save_draft(self, draft):
+        """
+        Saves a draft email message.
+
+        Args:
+            draft (dict): The draft email message with 'raw' field.
+        """
+        try:
+            # The Gmail API expects the draft in this format:
+            # {"message": {"raw": "base64_encoded_message"}}
+            create_draft = {"message": {"raw": draft["raw"]}}
+
+            saved_draft = (
+                self.service.users()
+                .drafts()
+                .create(userId="me", body=create_draft)
+                .execute()
+            )
+            print(f"Draft saved successfully with ID: {saved_draft.get('id', 'N/A')}")
+            return saved_draft
+        except HttpError as error:
+            print(f"An error occurred while saving draft: {error}")
+            return None
+
     def _get_message_details(self, message_id):
         """
         Retrieves message details of specified message
@@ -192,11 +234,41 @@ class GmailWriter:
             print(f"An error occurred while retrieving email {message_id}: {error}")
             return None
 
-    def _draft_parser_slack(self, draft: str) -> EmailMessage:
-        # decode
-        raw_bytes = base64.urlsafe_b64decode(draft["raw"].encode())
+    def _email_message_decoder(self, raw_str):
+        """Decodes a base64 encoded email and extracts its plain text body.
 
-        # parse into email message
-        email_msg = message_from_bytes(raw_bytes)
+        Args:
+            raw_str: A URL-safe base64 encoded string representing the raw email.
 
-        return email_msg
+        Returns:
+            The plain text body of the email.
+        """
+        # 1. Decode the base64 string back to bytes.
+        # The raw string is URL-safe, so we use urlsafe_b64decode.
+        raw_bytes = base64.urlsafe_b64decode(raw_str["raw"])
+
+        # 2. Parse the bytes into an EmailMessage object.
+        # We use message_from_bytes to reconstruct the email structure.
+        # The 'default' policy is a good choice for handling modern email formats.
+        email_message = message_from_bytes(raw_bytes, policy=default)
+
+        # Get the plain text body safely
+        body_part = email_message.get_body(preferencelist=("plain",))
+        body_content = body_part.get_content() if body_part is not None else ""
+
+        details = {
+            "sender": email_message["From"],
+            "recipient": email_message["To"],
+            "subject": email_message["Subject"],
+            "body": body_content,
+            "attachment": [],
+        }
+
+        for part in email_message.iter_attachments():
+            # attachment_data = {
+            #     "filename": part.get_filename(),
+            #     # "content": part.get_payload(decode=True)
+            # }
+            details["attachment"].append(part.get_filename())
+
+        return details
