@@ -42,3 +42,34 @@ class GmailToolFunction:
                 ],
             ),
         )
+
+    @staticmethod
+    def generate_create_draft_schema() -> ToolFunction:
+        """
+        Returns Pydantic ToolFunction for `GmailWriter.create_draft()`
+        """
+        return ToolFunction(
+            name="create_draft",
+            description="Creates an email draft with sender, recipient, subject, message, and optional attachment. Use this FIRST before sending to Slack.",
+            parameters=ToolParams(
+                type="object",
+                properties={
+                    "sender": ParamProperties(
+                        type="string", description="The sender's email address."
+                    ),
+                    "recipient": ParamProperties(
+                        type="string", description="The recipient's email address."
+                    ),
+                    "subject": ParamProperties(
+                        type="string", description="The subject of the email."
+                    ),
+                    "message": ParamProperties(
+                        type="string", description="The main content of the email."
+                    ),
+                    "attachment_path": ParamProperties(
+                        type="string", description="Path to attachment - Optional"
+                    ),
+                },
+                required=["sender", "recipient", "subject", "message"],
+            ),
+        )

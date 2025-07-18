@@ -1,8 +1,8 @@
-from typing import Optional
+from typing import Optional, Union, List
 
 from pydantic import BaseModel, Field
 
-from src.models.gmail import ToolFunction
+from src.models.toolfunction import ToolFunction
 
 
 class AgentSchema(BaseModel):
@@ -12,7 +12,7 @@ class AgentSchema(BaseModel):
     model: str = Field(
         "gpt-4.1", description="OpenAI model you would like to use to create agent"
     )
-    available_tools: dict = Field(
+    available_tools: Optional[dict] = Field(
         None,
         description="A dictionary of tools "
         "that the agent can use. Keys "
@@ -22,8 +22,8 @@ class AgentSchema(BaseModel):
 
 class ProcessRequestSchema(BaseModel):
     user_prompt: str = Field(..., description="Prompt from user")
-    llm_tool_schema: ToolFunction = Field(
-        ..., description="Pydantic LLM Schema for tools"
+    llm_tool_schema: Union[ToolFunction, List[ToolFunction]] = Field(
+        ..., description="Pydantic LLM Schema for tools (single or multiple)"
     )
     system_message: Optional[str] = Field(
         None,

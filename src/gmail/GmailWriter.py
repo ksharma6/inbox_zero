@@ -91,13 +91,27 @@ class GmailWriter:
             return None
 
     def send_draft_slack(self, draft):
+        """
+        Send a draft email message to Slack.
 
+        Args:
+            draft (dict): The draft email message with 'raw' field.
+
+        Returns:
+            dict: The sent message details.
+        """
         return self._email_message_decoder(draft)
 
     def send_draft(self, draft):
-        # send email draft
-        # create_email = {"raw": draft}
-        # print(create_email)
+        """
+        Send a draft email message to recipient.
+
+        Args:
+            draft (dict): The draft email message with 'raw' field.
+
+        Returns:
+            dict: The sent message details.
+        """
         send_message = (
             self.service.users().messages().send(userId="me", body=draft).execute()
         )
