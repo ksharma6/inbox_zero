@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any, Callable
+from typing import Dict, Callable
 
 from openai import OpenAI
 
@@ -37,7 +37,7 @@ class Agent:
                 self.function_map["send_reply"] = instance.send_reply
             elif isinstance(instance, GmailReader):
                 # Map GmailReader methods to function names
-                self.function_map["read_email"] = instance.read_email
+                self.function_map["read_emails"] = instance.read_emails
             elif isinstance(instance, DraftApprovalHandler):
                 # Map DraftApprovalHandler methods to function names
                 self.function_map["send_draft_for_approval"] = (
@@ -140,8 +140,8 @@ class Agent:
                             )
                             # Attempt to call with no args if appropriate, or handle default
                             if (
-                                function_name == "read_email"
-                            ):  # Example: read_email might default
+                                function_name == "read_emails"
+                            ):  # Example: read_emails might default
                                 result = function_to_call()
                             else:
                                 result = (
