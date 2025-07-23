@@ -32,16 +32,14 @@ class DraftApprovalHandler:
         self.draft_timeouts = {}  # Store timeout info: {draft_id: expiry_time}
         self.DRAFT_TIMEOUT_HOURS = 24  # Drafts expire after 24 hours
 
-    def send_draft_for_approval(
-        self, draft: Dict, user_id: str, channel_id: Optional[str] = None
-    ) -> Optional[str]:
+    def send_draft_for_approval(self, draft: Dict, user_id: str) -> Optional[str]:
         """
         Send a draft email for approval with interactive buttons.
 
         Args:
             draft: Gmail draft dictionary from create_draft()
             user_id: Slack user ID to send approval request to
-            channel_id: Optional channel ID (if not provided, sends DM)
+
 
         Returns:
             Optional[str]: The draft ID for tracking, or None if failed
@@ -71,7 +69,7 @@ class DraftApprovalHandler:
             approval_message = self._create_approval_message(decoded_draft, draft_id)
 
             # Send to Slack
-            target = channel_id if channel_id else user_id
+            target = user_id
             response = self.slack_app.client.chat_postMessage(
                 channel=target,
                 text=approval_message["text"],
