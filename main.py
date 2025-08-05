@@ -5,6 +5,7 @@ from src.utils.load_env import load_dotenv_helper
 from src.gmail.GmailReader import GmailReader
 from src.gmail.GmailWriter import GmailWriter
 from src.slack.DraftApprovalHandler import DraftApprovalHandler
+from src.LangGraph.factory import get_workflow
 from src.LangGraph.workflow import EmailProcessingWorkflow
 from src.LangGraph.state_manager import (
     load_state_from_store,
@@ -23,8 +24,6 @@ load_dotenv_helper(path="/Users/ksharma6/Documents/projects/inbox_zero/")
 slack_app = SlackApp(
     token=os.getenv("SLACK_BOT_TOKEN"),
     signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
-    # Temporarily disable signature verification for debugging
-    # process_before_response=True
 )
 
 # Global draft handler instance
@@ -104,28 +103,6 @@ def resume_workflow_after_action(user_id, respond):
 
         print(f"DEBUG: Full traceback: {traceback.format_exc()}")
         respond(f"❌ Error resuming workflow: {str(e)}")
-
-
-def get_workflow():
-    """Initialize EmailProcessingWorkflow with all dependencies and return to user
-
-    Returns:
-        EmailProcessingWorkflow: A configured workflow instance with all dependencies
-    """
-    gmail_token = os.getenv("TOKENS_PATH")
-    gmail_writer = GmailWriter(gmail_token)
-    gmail_reader = GmailReader(gmail_token)
-
-    # Use the same draft handler instance
-    draft_handler = get_draft_handler()
-
-    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    return EmailProcessingWorkflow(
-        gmail_reader=gmail_reader,
-        gmail_writer=gmail_writer,
-        draft_handler=draft_handler,
-        openai_client=openai_client,
-    )
 
 
 @app.route("/start_workflow", methods=["POST"])
