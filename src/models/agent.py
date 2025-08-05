@@ -63,6 +63,9 @@ class GmailAgentState(BaseModel):
     awaiting_approval_since: Optional[datetime.datetime] = Field(
         default=None, description="Time when waiting for approval started"
     )
+    current_draft_id: Optional[str] = Field(
+        default=None, description="ID of the current draft being reviewed"
+    )
 
     # Workflow control
     should_continue: bool = Field(
