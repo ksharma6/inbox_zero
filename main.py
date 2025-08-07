@@ -2,18 +2,16 @@ from flask import Flask, request, jsonify
 from slack_bolt import App as SlackApp
 
 from src.utils.load_env import load_dotenv_helper
-from src.gmail.GmailReader import GmailReader
 from src.gmail.GmailWriter import GmailWriter
+from src.routes.flask_routes import start_workflow, resume_workflow
 from src.slack.DraftApprovalHandler import DraftApprovalHandler
 from src.LangGraph.factory import get_workflow
-from src.LangGraph.workflow import EmailProcessingWorkflow
 from src.LangGraph.state_manager import (
     load_state_from_store,
     save_state_to_store,
     extract_langgraph_state,
 )
 from src.models.agent import GmailAgentState
-from openai import OpenAI
 import os
 import uuid
 
@@ -21,6 +19,7 @@ app = Flask(__name__)
 load_dotenv_helper(path="/Users/ksharma6/Documents/projects/inbox_zero/")
 
 # Global slack app instance
+## do i still need this SlackApp even with get_workflow containing a slack app ?
 slack_app = SlackApp(
     token=os.getenv("SLACK_BOT_TOKEN"),
     signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
@@ -106,101 +105,17 @@ def resume_workflow_after_action(user_id, respond):
 
 
 @app.route("/start_workflow", methods=["POST"])
-def start_workflow():
-    # Extract user_id from the POST request JSON body
-    user_id = request.json["user_id"]
-
-    # Get a configured workflow instance with all dependencies (GMail reader, writer, draft handler, openai client)
-    workflow = get_workflow()
-    # Generate a unique thread ID for this workflow run
-    thread_id = str(uuid.uuid4())
-    # Create initial workflow state with user and thread IDs
-    initial_state = GmailAgentState(user_id=user_id, thread_id=thread_id)
-    # Start the workflow execution as a generator, yielding states at each step
-    result_gen = workflow.workflow.stream(initial_state)
-    # Iterate through each state yielded by the workflow
-    for state in result_gen:
-
-        # Handle both dict and GmailAgentState objects
-        if isinstance(state, dict):
-            # LangGraph returns nested dict structure, extract the actual state
-            actual_state = extract_langgraph_state(state)
-            state = GmailAgentState(**actual_state)
-
-        # Check for pause condition
-        if state.awaiting_approval:  # Check if workflow is waiting for human approval
-            save_state_to_store(
-                state
-            )  # Save the current state to persistent storage so it can be resumed later
-            return jsonify(
-                {"status": "paused", "awaiting_approval": True}
-            )  # Return HTTP response indicating workflow is paused
-        final_state = state  # Store the current state as final_state (will be overwritten in each iteration)
-    save_state_to_store(
-        final_state
-    )  # Save the final state after workflow completes all steps
-    return jsonify(
-        {"status": "completed", "workflow_complete": final_state.workflow_complete}
-    )  # Return HTTP response with completion status
+def start_workflow_route():
+    return start_workflow()
 
 
 @app.route("/resume_workflow", methods=["POST"])
-def resume_workflow():
-    user_id = request.json["user_id"]
-    action = request.json["action"]  # e.g., 'approve' or 'reject'
-    state = load_state_from_store(user_id)
-
-    # Ensure state is a GmailAgentState object
-    if isinstance(state, dict):
-        # LangGraph returns nested dict structure, extract the actual state
-        actual_state = extract_langgraph_state(state)
-        state = GmailAgentState(**actual_state)
-
-    # Update state based on Slack action
-    state.awaiting_approval = False
-
-    if action == "approve_draft":
-        # Keep the current draft and move to next
-        state.current_draft_index += 1
-        print(f"User approved draft {state.current_draft_index - 1}")
-    elif action == "reject_draft":
-        # Use the draft handler to reject the draft
-        if state.draft_responses and state.current_draft_index < len(
-            state.draft_responses
-        ):
-            draft_info = state.draft_responses[state.current_draft_index]
-            # The DraftApprovalHandler will handle the rejection logic
-            print(f"User rejected draft {state.current_draft_index}")
-        state.current_draft_index += 1
-    elif action == "save_draft":
-        # Save the current draft
-        print(f"User saved draft {state.current_draft_index}")
-        # Optionally, you could add a saved_drafts list to track this
-        # state.saved_drafts.append(state.draft_responses[state.current_draft_index])
-        state.current_draft_index += 1
-    else:
-        # Unknown action, just continue
-        # MAY NEED TO REMOVE THIS
-        print(f"Unknown action: {action}, continuing workflow")
-        state.current_draft_index += 1
-
-    workflow = get_workflow()
-    result_gen = workflow.workflow.stream(state)
-    for new_state in result_gen:
-        # Ensure new_state is a GmailAgentState object
-        if isinstance(new_state, dict):
-            # LangGraph returns nested dict structure, extract the actual state
-            actual_state = extract_langgraph_state(new_state)
-            new_state = GmailAgentState(**actual_state)
-        final_state = new_state
-    save_state_to_store(final_state)
-    return jsonify(
-        {"status": "resumed", "workflow_complete": final_state.workflow_complete}
-    )
+def resume_workflow_route():
+    return resume_workflow()
 
 
 @slack_app.action("approve_draft")
-def approve_draft_action(ack, body, respond):
+def approve_draft_action(ack, body, respond, draft_handler=None):
     """Handle approve draft button click using DraftApprovalHandler"""
     print(f"DEBUG: approve_draft action received: {body}")
     print(
@@ -208,7 +123,8 @@ def approve_draft_action(ack, body, respond):
     )
 
     # Use the DraftApprovalHandler to handle the action
-    draft_handler = get_draft_handler()
+    if draft_handler is None:
+        draft_handler = get_draft_handler()
     print(f"DEBUG: About to call draft_handler.handle_approval_action")
     draft_handler.handle_approval_action(ack, body, respond)
     print(f"DEBUG: Finished draft_handler.handle_approval_action")
@@ -221,12 +137,13 @@ def approve_draft_action(ack, body, respond):
 
 
 @slack_app.action("reject_draft")
-def reject_draft_action(ack, body, respond):
+def reject_draft_action(ack, body, respond, draft_handler=None):
     """Handle reject draft button click using DraftApprovalHandler"""
     print(f"DEBUG: reject_draft action received: {body}")
 
     # Use the DraftApprovalHandler to handle the action
-    draft_handler = get_draft_handler()
+    if draft_handler is None:
+        draft_handler = get_draft_handler()
     draft_handler.handle_approval_action(ack, body, respond)
 
     # After handling the draft action, resume the workflow
@@ -235,12 +152,13 @@ def reject_draft_action(ack, body, respond):
 
 
 @slack_app.action("save_draft")
-def save_draft_action(ack, body, respond):
+def save_draft_action(ack, body, respond, draft_handler=None):
     """Handle save draft button click using DraftApprovalHandler"""
     print(f"DEBUG: save_draft action received: {body}")
 
     # Use the DraftApprovalHandler to handle the action
-    draft_handler = get_draft_handler()
+    if draft_handler is None:
+        draft_handler = get_draft_handler()
     draft_handler.handle_approval_action(ack, body, respond)
 
     # After handling the draft action, resume the workflow
@@ -309,56 +227,6 @@ def slack_events():
                         lambda: None, payload, lambda text: print(f"Response: {text}")
                     )
                     return jsonify({"response_action": "ack"})
-
-    # Handle other Slack events (including interactive components)
-    try:
-        print(f"DEBUG: About to call slack_app handler")
-        from slack_bolt.adapter.flask import SlackRequestHandler
-
-        handler = SlackRequestHandler(slack_app)
-        result = handler.handle(request)
-        print(f"DEBUG: Slack app handler result: {result}")
-        return result
-    except Exception as e:
-        print(f"DEBUG: Error in slack_app handler: {e}")
-        print(f"DEBUG: Exception type: {type(e)}")
-        import traceback
-
-        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
-
-        # Try manual handling as fallback
-        try:
-            print(f"DEBUG: Trying manual handling as fallback")
-            if request.form and "payload" in request.form:
-                import json
-
-                payload = json.loads(request.form["payload"])
-                print(f"DEBUG: Parsed payload: {payload}")
-
-                # Extract action details
-                if "actions" in payload and payload["actions"]:
-                    action = payload["actions"][0]
-                    action_id = action.get("action_id")
-                    print(f"DEBUG: Action ID: {action_id}")
-
-                    # Call the appropriate action handler directly
-                    if action_id == "approve_draft":
-                        from slack_bolt.context.ack import Ack
-                        from slack_bolt.context.say import Say
-
-                        def ack():
-                            return jsonify({"response_action": "ack"})
-
-                        def respond(text):
-                            return jsonify({"text": text})
-
-                        approve_draft_action(ack, payload, respond)
-                        return jsonify({"response_action": "ack"})
-
-            return jsonify({"error": "Manual handling failed"}), 500
-        except Exception as manual_error:
-            print(f"DEBUG: Manual handling also failed: {manual_error}")
-            return jsonify({"error": str(e)}), 500
 
     # Handle other Slack events (including interactive components)
     try:
