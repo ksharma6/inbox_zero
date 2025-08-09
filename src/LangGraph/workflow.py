@@ -12,6 +12,8 @@ from src.gmail.GmailReader import GmailReader
 from src.gmail.GmailWriter import GmailWriter
 from src.slack.DraftApprovalHandler import DraftApprovalHandler
 
+from .state_manager import save_state_to_store, load_state_from_store
+
 
 class EmailProcessingWorkflow:
     """LangGraph workflow for processing emails and generating draft responses"""
@@ -52,20 +54,27 @@ class EmailProcessingWorkflow:
         workflow.add_edge("generate_email_summary", "process_emails_for_drafts")
         workflow.add_edge("process_emails_for_drafts", "create_draft_responses")
         workflow.add_edge("create_draft_responses", "send_drafts_to_slack")
-        workflow.add_edge("send_drafts_to_slack", "wait_for_user_action")
+
+        # Conditional edges for send_drafts_to_slack
+        workflow.add_conditional_edges(
+            "send_drafts_to_slack",
+            lambda state: state.current_draft_index >= len(state.draft_responses),
+            {
+                True: "send_final_summary",
+                False: "wait_for_user_action",
+            },
+        )
+
+        # Conditional edges for wait_for_user_action
         workflow.add_conditional_edges(
             "wait_for_user_action",
             lambda state: state.awaiting_approval == False,
             {
                 True: "send_drafts_to_slack",
-                False: "wait_for_user_action",  # or just let it pause
+                False: "wait_for_user_action",  # Loop back to wait
             },
         )
-        workflow.add_conditional_edges(
-            "send_drafts_to_slack",
-            lambda state: state.current_draft_index >= len(state.draft_responses),
-            "send_final_summary",
-        )
+
         workflow.add_edge("send_final_summary", END)
 
         # Compile the workflow
@@ -281,13 +290,22 @@ class EmailProcessingWorkflow:
 
         # Send the next draft for approval
         draft_info = state.draft_responses[state.current_draft_index]
-        self.draft_handler.send_draft_for_approval(
+
+        # Send draft for approval using DraftApprovalHandler
+        draft_id = self.draft_handler.send_draft_for_approval(
             draft=draft_info["draft"],
             user_id=state.user_id,
         )
+
+        # Store the draft_id in state for reference
+        if draft_id:
+            state.current_draft_id = draft_id
+
         state.awaiting_approval = True
         state.awaiting_approval_since = datetime.datetime.now()
-        return state
+        # Save state and exit workflow here (do not continue)
+        save_state_to_store(state)
+        return state  # This pauses the workflow
 
     def _wait_for_user_action(self, state: GmailAgentState) -> GmailAgentState:
         # This node just checks if the user has acted
