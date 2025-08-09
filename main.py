@@ -2,17 +2,15 @@ from flask import Flask, request, jsonify
 from slack_bolt import App as SlackApp
 
 from src.utils.load_env import load_dotenv_helper
-from src.gmail.GmailReader import GmailReader
-from src.gmail.GmailWriter import GmailWriter
-from src.slack.DraftApprovalHandler import DraftApprovalHandler, get_draft_handler
-from src.LangGraph.workflow import EmailProcessingWorkflow
+
+from src.slack.workflow_bridge import resume_workflow_after_action
+from src.LangGraph.workflow_factory import get_workflow
 from src.LangGraph.state_manager import (
     load_state_from_store,
     save_state_to_store,
     extract_langgraph_state,
 )
 from src.models.agent import GmailAgentState
-from openai import OpenAI
 import os
 import uuid
 
@@ -25,94 +23,11 @@ slack_app = SlackApp(
     signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
 )
 
-# Global draft handler instance
-draft_handler = get_draft_handler(slack_app)
 
-
-def resume_workflow_after_action(user_id, respond):
-    """Helper function to resume workflow after draft action"""
-    print(f"DEBUG: resume_workflow_after_action called for user: {user_id}")
-    try:
-        state = load_state_from_store(user_id)
-        print(f"DEBUG: Loaded state: {state}")
-        if state is None:
-            print(f"DEBUG: No state found for user: {user_id}")
-            return  # No workflow to resume
-
-        # Ensure state is a GmailAgentState object
-        if isinstance(state, dict):
-            actual_state = extract_langgraph_state(state)
-            state = GmailAgentState(**actual_state)
-            print(f"DEBUG: Converted state to GmailAgentState")
-
-        print(f"DEBUG: Current draft index: {state.current_draft_index}")
-        print(
-            f"DEBUG: Total drafts: {len(state.draft_responses) if state.draft_responses else 0}"
-        )
-        print(f"DEBUG: Awaiting approval: {state.awaiting_approval}")
-
-        # Update state to continue workflow
-        state.awaiting_approval = False
-        state.current_draft_index += 1
-        print(f"DEBUG: Updated draft index to: {state.current_draft_index}")
-
-        # Resume the workflow
-        workflow = get_workflow()
-        print(f"DEBUG: Got workflow, about to stream")
-        result_gen = workflow.workflow.stream(state)
-        for new_state in result_gen:
-            if isinstance(new_state, dict):
-                actual_state = extract_langgraph_state(new_state)
-                new_state = GmailAgentState(**actual_state)
-            final_state = new_state
-            print(
-                f"DEBUG: Processing new state, awaiting_approval: {final_state.awaiting_approval}"
-            )
-
-            # Check if workflow paused again
-            if final_state.awaiting_approval:
-                save_state_to_store(final_state)
-                print(f"DEBUG: Workflow paused again, saved state")
-                respond(f"⏸️ Workflow paused. Waiting for next draft approval.")
-                return
-
-        save_state_to_store(final_state)
-        print(
-            f"DEBUG: Workflow completed, final state: {final_state.workflow_complete}"
-        )
-        if final_state.workflow_complete:
-            respond(f"✅ Workflow completed successfully!")
-        else:
-            respond(f"✅ Workflow resumed and completed.")
-
-    except Exception as e:
-        print(f"Error resuming workflow: {e}")
-        import traceback
-
-        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
-        respond(f"❌ Error resuming workflow: {str(e)}")
-
-
-def get_workflow():
-    """Initialize EmailProcessingWorkflow with all dependencies and return to user
-
-    Returns:
-        EmailProcessingWorkflow: A configured workflow instance with all dependencies
-    """
-    gmail_token = os.getenv("TOKENS_PATH")
-    gmail_writer = GmailWriter(gmail_token)
-    gmail_reader = GmailReader(gmail_token)
-
-    # # Use the same draft handler instance
-    # draft_handler = get_draft_handler(slack_app)
-
-    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    return EmailProcessingWorkflow(
-        gmail_reader=gmail_reader,
-        gmail_writer=gmail_writer,
-        draft_handler=draft_handler,
-        openai_client=openai_client,
-    )
+# initialize workflow
+workflow = get_workflow(
+    slack_app
+)  # we want a singluar workflow that has a draft handler that is shared
 
 
 @app.route("/start_workflow", methods=["POST"])
@@ -120,8 +35,7 @@ def start_workflow():
     # Extract user_id from the POST request JSON body
     user_id = request.json["user_id"]
 
-    # Get a configured workflow instance with all dependencies (GMail reader, writer, draft handler, openai client)
-    workflow = get_workflow()
+    # Use the shared workflow instance created at module import
     # Generate a unique thread ID for this workflow run
     thread_id = str(uuid.uuid4())
     # Create initial workflow state with user and thread IDs
@@ -194,7 +108,7 @@ def resume_workflow():
         print(f"Unknown action: {action}, continuing workflow")
         state.current_draft_index += 1
 
-    workflow = get_workflow()
+    # Use the shared workflow instance created at module import
     result_gen = workflow.workflow.stream(state)
     for new_state in result_gen:
         # Ensure new_state is a GmailAgentState object
@@ -219,14 +133,14 @@ def approve_draft_action(ack, body, respond):
 
     # Use the DraftApprovalHandler to handle the action
     # draft_handler = get_draft_handler(slack_app)
-    print(f"DEBUG: About to call draft_handler.handle_approval_action")
-    draft_handler.handle_approval_action(ack, body, respond)
-    print(f"DEBUG: Finished draft_handler.handle_approval_action")
+    print(f"DEBUG: About to call workflow.draft_handler.handle_approval_action")
+    workflow.draft_handler.handle_approval_action(ack, body, respond)
+    print(f"DEBUG: Finished workflow.draft_handler.handle_approval_action")
 
     # After handling the draft action, resume the workflow
     user_id = body["user"]["id"]
     print(f"DEBUG: About to resume workflow for user: {user_id}")
-    resume_workflow_after_action(user_id, respond)
+    resume_workflow_after_action(user_id, respond, workflow)
     print(f"DEBUG: Finished resume_workflow_after_action")
 
 
@@ -235,13 +149,12 @@ def reject_draft_action(ack, body, respond):
     """Handle reject draft button click using DraftApprovalHandler"""
     print(f"DEBUG: reject_draft action received: {body}")
 
-    # Use the DraftApprovalHandler to handle the action
-    # draft_handler = get_draft_handler(slack_app)
-    draft_handler.handle_approval_action(ack, body, respond)
+    # Use the shared workflow's DraftApprovalHandler to handle the action
+    workflow.draft_handler.handle_approval_action(ack, body, respond)
 
     # After handling the draft action, resume the workflow
     user_id = body["user"]["id"]
-    resume_workflow_after_action(user_id, respond)
+    resume_workflow_after_action(user_id, respond, workflow)
 
 
 @slack_app.action("save_draft")
@@ -249,13 +162,12 @@ def save_draft_action(ack, body, respond):
     """Handle save draft button click using DraftApprovalHandler"""
     print(f"DEBUG: save_draft action received: {body}")
 
-    # Use the DraftApprovalHandler to handle the action
-    # draft_handler = get_draft_handler(slack_app )
-    draft_handler.handle_approval_action(ack, body, respond)
+    # Use the shared workflow's DraftApprovalHandler to handle the action
+    workflow.draft_handler.handle_approval_action(ack, body, respond)
 
     # After handling the draft action, resume the workflow
     user_id = body["user"]["id"]
-    resume_workflow_after_action(user_id, respond)
+    resume_workflow_after_action(user_id, respond, workflow)
 
 
 @app.route("/slack/events", methods=["POST"])
