@@ -371,30 +371,6 @@ def slack_events():
             return jsonify({"error": str(e)}), 500
 
 
-@app.route("/", methods=["GET"])
-def root():
-    return jsonify(
-        {
-            "message": "Flask app is running",
-            "status": "ok",
-            "timestamp": "2024-01-01T00:00:00Z",
-        }
-    )
-
-
-@app.route("/test", methods=["GET"])
-def test():
-    return jsonify(
-        {
-            "status": "ok",
-            "slack_token_exists": bool(os.getenv("SLACK_BOT_TOKEN")),
-            "slack_token_length": len(os.getenv("SLACK_BOT_TOKEN", "")),
-            "slack_signing_secret_exists": bool(os.getenv("SLACK_SIGNING_SECRET")),
-            "app_running": True,
-        }
-    )
-
-
 @app.route("/slack/actions", methods=["POST"])
 def slack_actions():
     """Handle Slack interactive components (button clicks)"""
@@ -468,37 +444,6 @@ def slack_actions():
         except Exception as manual_error:
             print(f"DEBUG: Manual handling also failed: {manual_error}")
             return jsonify({"error": str(e)}), 500
-
-
-@app.route("/slack/health", methods=["GET"])
-def slack_health():
-    """Health check endpoint for Slack integration"""
-    return jsonify(
-        {
-            "status": "healthy",
-            "slack_token_exists": bool(os.getenv("SLACK_BOT_TOKEN")),
-            "slack_token_length": len(os.getenv("SLACK_BOT_TOKEN", "")),
-            "slack_token_prefix": (
-                os.getenv("SLACK_BOT_TOKEN", "")[:10] + "..."
-                if os.getenv("SLACK_BOT_TOKEN")
-                else "None"
-            ),
-            "slack_signing_secret_exists": bool(os.getenv("SLACK_SIGNING_SECRET")),
-            "slack_signing_secret_length": len(os.getenv("SLACK_SIGNING_SECRET", "")),
-            "slack_signing_secret_prefix": (
-                os.getenv("SLACK_SIGNING_SECRET", "")[:10] + "..."
-                if os.getenv("SLACK_SIGNING_SECRET")
-                else "None"
-            ),
-            "endpoints": {
-                "events": "/slack/events",
-                "actions": "/slack/actions",
-                "start_workflow": "/start_workflow",
-                "resume_workflow": "/resume_workflow",
-                "health": "/slack/health",
-            },
-        }
-    )
 
 
 if __name__ == "__main__":
