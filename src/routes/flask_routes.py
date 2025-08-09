@@ -114,3 +114,67 @@ def resume_workflow():
     return jsonify(
         {"status": "resumed", "workflow_complete": final_state.workflow_complete}
     )
+
+
+def resume_workflow_after_action(user_id, respond):
+    """Helper function to resume workflow after draft action"""
+    print(f"DEBUG: resume_workflow_after_action called for user: {user_id}")
+    try:
+        state = load_state_from_store(user_id)
+        print(f"DEBUG: Loaded state: {state}")
+        if state is None:
+            print(f"DEBUG: No state found for user: {user_id}")
+            return  # No workflow to resume
+
+        # Ensure state is a GmailAgentState object
+        if isinstance(state, dict):
+            actual_state = extract_langgraph_state(state)
+            state = GmailAgentState(**actual_state)
+            print(f"DEBUG: Converted state to GmailAgentState")
+
+        print(f"DEBUG: Current draft index: {state.current_draft_index}")
+        print(
+            f"DEBUG: Total drafts: {len(state.draft_responses) if state.draft_responses else 0}"
+        )
+        print(f"DEBUG: Awaiting approval: {state.awaiting_approval}")
+
+        # Update state to continue workflow
+        state.awaiting_approval = False
+        state.current_draft_index += 1
+        print(f"DEBUG: Updated draft index to: {state.current_draft_index}")
+
+        # Resume the workflow
+        workflow = get_workflow()
+        print(f"DEBUG: Got workflow, about to stream")
+        result_gen = workflow.workflow.stream(state)
+        for new_state in result_gen:
+            if isinstance(new_state, dict):
+                actual_state = extract_langgraph_state(new_state)
+                new_state = GmailAgentState(**actual_state)
+            final_state = new_state
+            print(
+                f"DEBUG: Processing new state, awaiting_approval: {final_state.awaiting_approval}"
+            )
+
+            # Check if workflow paused again
+            if final_state.awaiting_approval:
+                save_state_to_store(final_state)
+                print(f"DEBUG: Workflow paused again, saved state")
+                respond(f"⏸️ Workflow paused. Waiting for next draft approval.")
+                return
+
+        save_state_to_store(final_state)
+        print(
+            f"DEBUG: Workflow completed, final state: {final_state.workflow_complete}"
+        )
+        if final_state.workflow_complete:
+            respond(f"✅ Workflow completed successfully!")
+        else:
+            respond(f"✅ Workflow resumed and completed.")
+
+    except Exception as e:
+        print(f"Error resuming workflow: {e}")
+        import traceback
+
+        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
+        respond(f"❌ Error resuming workflow: {str(e)}")
