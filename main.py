@@ -4,7 +4,7 @@ from slack_bolt import App as SlackApp
 from src.utils.load_env import load_dotenv_helper
 from src.gmail.GmailReader import GmailReader
 from src.gmail.GmailWriter import GmailWriter
-from src.slack.DraftApprovalHandler import DraftApprovalHandler
+from src.slack.DraftApprovalHandler import DraftApprovalHandler, get_draft_handler
 from src.LangGraph.workflow import EmailProcessingWorkflow
 from src.LangGraph.state_manager import (
     load_state_from_store,
@@ -23,23 +23,10 @@ load_dotenv_helper(path="/Users/ksharma6/Documents/projects/inbox_zero/")
 slack_app = SlackApp(
     token=os.getenv("SLACK_BOT_TOKEN"),
     signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
-    # Temporarily disable signature verification for debugging
-    # process_before_response=True
 )
 
 # Global draft handler instance
-draft_handler = None
-
-
-def get_draft_handler():
-    """Get or create the draft approval handler"""
-    global draft_handler
-    if draft_handler is None:
-        gmail_writer = GmailWriter(os.getenv("TOKENS_PATH"))
-        draft_handler = DraftApprovalHandler(
-            gmail_writer=gmail_writer, slack_app=slack_app
-        )
-    return draft_handler
+draft_handler = get_draft_handler(slack_app)
 
 
 def resume_workflow_after_action(user_id, respond):
@@ -116,8 +103,8 @@ def get_workflow():
     gmail_writer = GmailWriter(gmail_token)
     gmail_reader = GmailReader(gmail_token)
 
-    # Use the same draft handler instance
-    draft_handler = get_draft_handler()
+    # # Use the same draft handler instance
+    # draft_handler = get_draft_handler(slack_app)
 
     openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     return EmailProcessingWorkflow(
@@ -231,7 +218,7 @@ def approve_draft_action(ack, body, respond):
     )
 
     # Use the DraftApprovalHandler to handle the action
-    draft_handler = get_draft_handler()
+    # draft_handler = get_draft_handler(slack_app)
     print(f"DEBUG: About to call draft_handler.handle_approval_action")
     draft_handler.handle_approval_action(ack, body, respond)
     print(f"DEBUG: Finished draft_handler.handle_approval_action")
@@ -249,7 +236,7 @@ def reject_draft_action(ack, body, respond):
     print(f"DEBUG: reject_draft action received: {body}")
 
     # Use the DraftApprovalHandler to handle the action
-    draft_handler = get_draft_handler()
+    # draft_handler = get_draft_handler(slack_app)
     draft_handler.handle_approval_action(ack, body, respond)
 
     # After handling the draft action, resume the workflow
@@ -263,7 +250,7 @@ def save_draft_action(ack, body, respond):
     print(f"DEBUG: save_draft action received: {body}")
 
     # Use the DraftApprovalHandler to handle the action
-    draft_handler = get_draft_handler()
+    # draft_handler = get_draft_handler(slack_app )
     draft_handler.handle_approval_action(ack, body, respond)
 
     # After handling the draft action, resume the workflow
@@ -332,56 +319,6 @@ def slack_events():
                         lambda: None, payload, lambda text: print(f"Response: {text}")
                     )
                     return jsonify({"response_action": "ack"})
-
-    # Handle other Slack events (including interactive components)
-    try:
-        print(f"DEBUG: About to call slack_app handler")
-        from slack_bolt.adapter.flask import SlackRequestHandler
-
-        handler = SlackRequestHandler(slack_app)
-        result = handler.handle(request)
-        print(f"DEBUG: Slack app handler result: {result}")
-        return result
-    except Exception as e:
-        print(f"DEBUG: Error in slack_app handler: {e}")
-        print(f"DEBUG: Exception type: {type(e)}")
-        import traceback
-
-        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
-
-        # Try manual handling as fallback
-        try:
-            print(f"DEBUG: Trying manual handling as fallback")
-            if request.form and "payload" in request.form:
-                import json
-
-                payload = json.loads(request.form["payload"])
-                print(f"DEBUG: Parsed payload: {payload}")
-
-                # Extract action details
-                if "actions" in payload and payload["actions"]:
-                    action = payload["actions"][0]
-                    action_id = action.get("action_id")
-                    print(f"DEBUG: Action ID: {action_id}")
-
-                    # Call the appropriate action handler directly
-                    if action_id == "approve_draft":
-                        from slack_bolt.context.ack import Ack
-                        from slack_bolt.context.say import Say
-
-                        def ack():
-                            return jsonify({"response_action": "ack"})
-
-                        def respond(text):
-                            return jsonify({"text": text})
-
-                        approve_draft_action(ack, payload, respond)
-                        return jsonify({"response_action": "ack"})
-
-            return jsonify({"error": "Manual handling failed"}), 500
-        except Exception as manual_error:
-            print(f"DEBUG: Manual handling also failed: {manual_error}")
-            return jsonify({"error": str(e)}), 500
 
     # Handle other Slack events (including interactive components)
     try:
