@@ -3,6 +3,7 @@ tokens/
 .venv/
 .env
 docdrafts/
+template.txt
 
 # Jupyter Notebook checkpoints
 notebooks/
