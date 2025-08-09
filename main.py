@@ -9,7 +9,7 @@ from src.routes.slack_handlers import (
     save_draft_action,
     slack_events,
 )
-from src.slack.DraftApprovalHandler import get_draft_handler
+from src.slack.DraftApprovalHandler import DraftApprovalHandler
 
 import os
 
@@ -22,8 +22,11 @@ slack_app = SlackApp(
 )
 
 
-# Global draft handler instance
-gmail_writer = GmailWriter(os.getenv("TOKENS_PATH"))
+# Global draft handler instance reused across all Slack actions/routes
+draft_handler = DraftApprovalHandler(
+    gmail_writer=GmailWriter(os.getenv("TOKENS_PATH")),
+    slack_app=slack_app,
+)
 
 
 @app.route("/start_workflow", methods=["POST"])
@@ -38,25 +41,21 @@ def resume_workflow_route():
 
 @slack_app.action("approve_draft")
 def approve_draft_action_slack(ack, body, respond):
-    draft_handler = get_draft_handler(slack_app)
     approve_draft_action(ack, body, respond, draft_handler)
 
 
 @slack_app.action("reject_draft")
 def reject_draft_action_slack(ack, body, respond):
-    draft_handler = get_draft_handler(slack_app)
     reject_draft_action(ack, body, respond, draft_handler)
 
 
 @slack_app.action("save_draft")
 def save_draft_action_slack(ack, body, respond):
-    draft_handler = get_draft_handler(slack_app)
     save_draft_action(ack, body, respond, draft_handler)
 
 
 @app.route("/slack/events", methods=["POST"])
 def slack_events_route():
-    draft_handler = get_draft_handler(slack_app)
     return slack_events(draft_handler, slack_app)
 
 
