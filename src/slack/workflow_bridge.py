@@ -4,9 +4,12 @@ from src.LangGraph.state_manager import (
     extract_langgraph_state,
 )
 from src.models.agent import GmailAgentState
+from src.LangGraph.workflow import EmailProcessingWorkflow
 
 
-def resume_workflow_after_action(user_id: str, respond, workflow):
+def resume_workflow_after_action(
+    user_id: str, respond, workflow: EmailProcessingWorkflow
+):
 
     state = load_state_from_store(user_id)
     if state is None:

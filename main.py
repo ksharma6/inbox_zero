@@ -10,6 +10,9 @@ from src.LangGraph.state_manager import (
     save_state_to_store,
     extract_langgraph_state,
 )
+
+from src.routes.flask_routes import register_flask_routes
+
 from src.models.agent import GmailAgentState
 import os
 import uuid
@@ -24,103 +27,9 @@ slack_app = SlackApp(
 )
 
 
-# initialize workflow
-workflow = get_workflow(
-    slack_app
-)  # we want a singluar workflow that has a draft handler that is shared
-
-
-@app.route("/start_workflow", methods=["POST"])
-def start_workflow():
-    # Extract user_id from the POST request JSON body
-    user_id = request.json["user_id"]
-
-    # Use the shared workflow instance created at module import
-    # Generate a unique thread ID for this workflow run
-    thread_id = str(uuid.uuid4())
-    # Create initial workflow state with user and thread IDs
-    initial_state = GmailAgentState(user_id=user_id, thread_id=thread_id)
-    # Start the workflow execution as a generator, yielding states at each step
-    result_gen = workflow.workflow.stream(initial_state)
-    # Iterate through each state yielded by the workflow
-    for state in result_gen:
-
-        # Handle both dict and GmailAgentState objects
-        if isinstance(state, dict):
-            # LangGraph returns nested dict structure, extract the actual state
-            actual_state = extract_langgraph_state(state)
-            state = GmailAgentState(**actual_state)
-
-        # Check for pause condition
-        if state.awaiting_approval:  # Check if workflow is waiting for human approval
-            save_state_to_store(
-                state
-            )  # Save the current state to persistent storage so it can be resumed later
-            return jsonify(
-                {"status": "paused", "awaiting_approval": True}
-            )  # Return HTTP response indicating workflow is paused
-        final_state = state  # Store the current state as final_state (will be overwritten in each iteration)
-    save_state_to_store(
-        final_state
-    )  # Save the final state after workflow completes all steps
-    return jsonify(
-        {"status": "completed", "workflow_complete": final_state.workflow_complete}
-    )  # Return HTTP response with completion status
-
-
-@app.route("/resume_workflow", methods=["POST"])
-def resume_workflow():
-    user_id = request.json["user_id"]
-    action = request.json["action"]  # e.g., 'approve' or 'reject'
-    state = load_state_from_store(user_id)
-
-    # Ensure state is a GmailAgentState object
-    if isinstance(state, dict):
-        # LangGraph returns nested dict structure, extract the actual state
-        actual_state = extract_langgraph_state(state)
-        state = GmailAgentState(**actual_state)
-
-    # Update state based on Slack action
-    state.awaiting_approval = False
-
-    if action == "approve_draft":
-        # Keep the current draft and move to next
-        state.current_draft_index += 1
-        print(f"User approved draft {state.current_draft_index - 1}")
-    elif action == "reject_draft":
-        # Use the draft handler to reject the draft
-        if state.draft_responses and state.current_draft_index < len(
-            state.draft_responses
-        ):
-            draft_info = state.draft_responses[state.current_draft_index]
-            # The DraftApprovalHandler will handle the rejection logic
-            print(f"User rejected draft {state.current_draft_index}")
-        state.current_draft_index += 1
-    elif action == "save_draft":
-        # Save the current draft
-        print(f"User saved draft {state.current_draft_index}")
-        # Optionally, you could add a saved_drafts list to track this
-        # state.saved_drafts.append(state.draft_responses[state.current_draft_index])
-        state.current_draft_index += 1
-    else:
-        # Unknown action, just continue
-        # MAY NEED TO REMOVE THIS
-        print(f"Unknown action: {action}, continuing workflow")
-        state.current_draft_index += 1
-
-    # Use the shared workflow instance created at module import
-    result_gen = workflow.workflow.stream(state)
-    for new_state in result_gen:
-        # Ensure new_state is a GmailAgentState object
-        if isinstance(new_state, dict):
-            # LangGraph returns nested dict structure, extract the actual state
-            actual_state = extract_langgraph_state(new_state)
-            new_state = GmailAgentState(**actual_state)
-        final_state = new_state
-    save_state_to_store(final_state)
-    return jsonify(
-        {"status": "resumed", "workflow_complete": final_state.workflow_complete}
-    )
+# initialize workflow (singleton) and register routes that depend on it
+workflow = get_workflow(slack_app)
+register_flask_routes(app, workflow)
 
 
 @slack_app.action("approve_draft")
