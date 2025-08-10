@@ -322,3 +322,10 @@ class DraftApprovalHandler:
             del self.pending_drafts[draft_id]
         if draft_id in self.draft_timeouts:
             del self.draft_timeouts[draft_id]
+
+
+def get_draft_handler(slack_app: App):
+    """Get or create the draft approval handler"""
+    gmail_writer = GmailWriter(os.getenv("TOKENS_PATH"))
+    draft_handler = DraftApprovalHandler(gmail_writer=gmail_writer, slack_app=slack_app)
+    return draft_handler
