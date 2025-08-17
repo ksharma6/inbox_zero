@@ -4,7 +4,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
-# If modifying these scopes, delete the file token.json.
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/calendar.freebusy",
@@ -12,22 +11,20 @@ SCOPES = [
 
 
 def auth_user(path):
-    """Authenticate user's Gmail account access.
+    """Authenticate user's Gmail account access and saves credentials to token.json file.
 
     Args:
-        path (string): path to directory where user's gmail token.json file
-        exists. The file token.json stores the user's access and refresh tokens, and is
-        created automatically when the authorization flow completes for the first time.
+        path (string): file path to directory where user's gmail token.json file exists. If not provided,
+        defaults to current working directory.
 
     Returns:
         creds: Authenticated token from user
     """
-    # Check for token.json in path for valid credentials\
     creds = None
     if os.path.exists(path + "token.json"):
         creds = Credentials.from_authorized_user_file(path + "token.json", SCOPES)
 
-    # If there are no (valid) credentials available, let the user log in.
+    # user login flow
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -37,7 +34,7 @@ def auth_user(path):
             )
             creds = flow.run_local_server(port=0)
 
-        # Save the credentials for the next run
+        # save credentials
         with open(path + "token.json", "w") as token:
             token.write(creds.to_json())
 
