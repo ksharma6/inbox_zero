@@ -9,7 +9,25 @@ from src.models.gmail import EmailMessage
 
 
 class GmailReader:
-    """Class performs reading operations using the Gmail API"""
+    """
+    Reader for Gmail that authenticates and fetches messages via the Gmail API.
+
+    This client wraps the Gmail API to retrieve messages from the user's inbox,
+    search using Gmail query syntax, and fetch individual messages by ID.
+
+    Args:
+        path (str): Directory containing the user's Gmail OAuth tokens (e.g.,
+            `token.json`). Used by `auth_user` to obtain credentials.
+
+    Attributes:
+        path (str): Directory used to locate authentication tokens.
+        creds: OAuth credentials used for Gmail API.
+        service: Gmail API service client.
+
+    Example:
+        reader = GmailReader(path="/path/to/tokens")
+        emails = reader.read_emails(count=5, unread_only=True, include_body=True)
+    """
 
     def __init__(self, path):
         self.path = path
@@ -22,32 +40,36 @@ class GmailReader:
         unread_only: bool = False,
         include_body: bool = True,
         primary_only: bool = True,
-        thread_id: Optional[str] = None,
+        thread_id: Optional[List[str]] = None,
     ) -> List[EmailMessage]:
         """
-        Read emails with enhanced functionality matching the schema.
+        Read emails from the user's inbox.
+
+        Builds a Gmail query targeting the Inbox (and Primary by default), then fetches
+        up to `count` messages and returns them as `EmailMessage` models.
 
         Args:
-            count: Number of emails to retrieve (max 25)
-            unread_only: Whether to retrieve only unread emails
-            include_body: Whether to include full email body content
-            primary_only: Whether to retrieve only emails from Primary inbox category
+            count (int): Minimum number of messages to fetch (capped at 25).
+            unread_only (bool): If True, restricts to unread messages.
+            include_body (bool): If True, includes the parsed body text.
+            primary_only (bool): If True, restricts to the Primary category.
 
         Returns:
-            List of EmailMessage objects
+            List[EmailMessage]: Messages in reverse-chronological order from the inbox.
         """
-        # Build query to specifically target inbox emails
-        query_parts = ["in:inbox"]  # Only inbox emails
+
+        # target inbox emails only
+        query_parts = ["in:inbox"]
 
         if primary_only:
-            query_parts.append("category:primary")  # Only Primary category emails
+            query_parts.append("category:primary")
 
         if unread_only:
             query_parts.append("is:unread")
 
         query = " ".join(query_parts)
 
-        # List the user's messages, cap at 25 messages
+        # list of user's messages - capped at 25 messages
         list_params = {"userId": "me", "maxResults": min(count, 25), "q": query}
 
         results = self.service.users().messages().list(**list_params).execute()
@@ -69,7 +91,14 @@ class GmailReader:
         self, thread_id: str, count: int = 4
     ) -> List[EmailMessage]:
         """
-        Get the most recent emails in a thread.
+        Get the most recent emails in thread specified by thread_id.
+
+        Args:
+            thread_id (str): Unique Gmail thread identifier.
+            count (int): Maximum number of messages to return.
+
+        Returns:
+            List[EmailMessage]: Messages from the given thread, if available.
         """
         return self.read_emails(count=count, thread_id=thread_id)
 
@@ -77,14 +106,14 @@ class GmailReader:
         self, email_id: str, include_body: bool = True
     ) -> Optional[EmailMessage]:
         """
-        Retrieve a specific email by its Gmail message ID.
+        Retrieve a specific email by its unique Gmail message ID.
 
         Args:
-            email_id: Gmail message ID
-            include_body: Whether to include full email body content
+            email_id (str): Gmail message ID.
+            include_body (bool): Whether to include full email body content.
 
         Returns:
-            EmailMessage object or None if not found
+            Optional[EmailMessage]: The email if found; otherwise None.
         """
         try:
             message_detail = (
@@ -103,15 +132,15 @@ class GmailReader:
         self, query: str, max_results: int = 10, include_body: bool = False
     ) -> List[EmailMessage]:
         """
-        Search emails using Gmail search query syntax.
+        Search emails using Gmail query syntax.
 
         Args:
-            query: Gmail search query (e.g., 'from:example@gmail.com', 'subject:meeting')
-            max_results: Maximum number of results to return
-            include_body: Whether to include full email body content
+            query (str): Gmail search query (e.g., 'from:example@gmail.com', 'subject:meeting').
+            max_results (int): Maximum number of results to return.
+            include_body (bool): Whether to include full email body content.
 
         Returns:
-            List of EmailMessage objects
+            List[EmailMessage]: Matching messages.
         """
         try:
             results = (
@@ -146,12 +175,12 @@ class GmailReader:
         Helper method to create EmailMessage object from Gmail API response.
 
         Args:
-            message_id: Gmail message ID
-            include_body: Whether to include full email body content
-            message_detail: Pre-fetched message detail (optional)
+            message_id (str): Unique Gmail message ID.
+            include_body (bool): Whether to include full email body content.
+            message_detail (Optional[Dict]): Pre-fetched message detail (optional)
 
         Returns:
-            EmailMessage object or None if error
+            Optional[EmailMessage]: Parsed email or None if error.
         """
         try:
             if not message_detail:
@@ -210,11 +239,11 @@ class GmailReader:
         Generate a human-readable summary of recent email activity.
 
         Args:
-            emails: List of email messages
-            summary_by_sender: Dictionary grouping emails by sender
+            emails (List[EmailMessage]): List of email messages.
+            summary_by_sender (Dict): Dictionary grouping emails by sender.
 
         Returns:
-            String summary of recent activity
+            str: Summary of recent activity.
         """
         if not emails:
             return "No recent email activity."
@@ -244,11 +273,14 @@ class GmailReader:
 
     def _get_header(self, headers: list, name: str):
         """
-        Retrieves the value from a specified email header from list of headers
+        Retrieve the value of a specific email header.
 
         Args:
-            headers (list): list of header dictionaries
-            name (str): name of the header to find (e.g., 'Subject','From)
+            headers (list): List of header dictionaries.
+            name (str): Header name to find (e.g., 'Subject', 'From').
+
+        Returns:
+            Optional[str]: Header value if present; otherwise None.
         """
 
         if headers:
@@ -260,13 +292,13 @@ class GmailReader:
 
     def _html_parser(self, data: str):
         """
-        Removes HTML tags from a string using BS4
+        Convert HTML to plain text using BeautifulSoup.
 
         Args:
-            data (str): string you would like parser applied to
+            data (str): HTML or plain text.
 
         Returns:
-            cleaned_data (str): parsed input data string
+            str: Cleaned plain-text content.
         """
         if not data or data == "":
             print("string not found")
@@ -285,13 +317,13 @@ class GmailReader:
 
     def _get_email_body(self, payload):
         """
-        Helper to extract email body including multipart messages (e.g. forwarded emails).
+        Extract a combined plain-text body from a Gmail message payload.
 
         Args:
-            payload (dict): payload received from gmail service object
+            payload (dict): Gmail message payload.
 
         Returns:
-            body (string): concatenated string of all readable parts of payload.
+            str: Concatenated text of all readable parts.
         """
 
         body = ""
