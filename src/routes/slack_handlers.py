@@ -1,7 +1,9 @@
-from src.routes.flask_routes import resume_workflow_after_action
-from flask import request, jsonify
-from slack_bolt.adapter.flask import SlackRequestHandler
 import os
+
+from flask import jsonify, request
+from slack_bolt.adapter.flask import SlackRequestHandler
+
+from src.routes.flask.flask_routes import resume_workflow_after_action
 
 
 def approve_draft_action(ack, body, respond, draft_handler):
