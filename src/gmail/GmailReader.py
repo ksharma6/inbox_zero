@@ -102,69 +102,6 @@ class GmailReader:
         """
         return self.read_emails(count=count, thread_id=thread_id)
 
-    def get_email_by_id(
-        self, email_id: str, include_body: bool = True
-    ) -> Optional[EmailMessage]:
-        """
-        Retrieve a specific email by its unique Gmail message ID.
-
-        Args:
-            email_id (str): Gmail message ID.
-            include_body (bool): Whether to include full email body content.
-
-        Returns:
-            Optional[EmailMessage]: The email if found; otherwise None.
-        """
-        try:
-            message_detail = (
-                self.service.users()
-                .messages()
-                .get(userId="me", id=email_id, format="full")
-                .execute()
-            )
-
-            return self._get_email_message(email_id, include_body, message_detail)
-        except Exception as e:
-            print(f"Error retrieving email {email_id}: {e}")
-            return None
-
-    def search_emails(
-        self, query: str, max_results: int = 10, include_body: bool = False
-    ) -> List[EmailMessage]:
-        """
-        Search emails using Gmail query syntax.
-
-        Args:
-            query (str): Gmail search query (e.g., 'from:example@gmail.com', 'subject:meeting').
-            max_results (int): Maximum number of results to return.
-            include_body (bool): Whether to include full email body content.
-
-        Returns:
-            List[EmailMessage]: Matching messages.
-        """
-        try:
-            results = (
-                self.service.users()
-                .messages()
-                .list(userId="me", q=query, maxResults=min(max_results, 50))
-                .execute()
-            )
-
-            messages = results.get("messages", [])
-            if not messages:
-                return []
-
-            email_messages = []
-            for message in messages:
-                email_msg = self._get_email_message(message["id"], include_body)
-                if email_msg:
-                    email_messages.append(email_msg)
-
-            return email_messages
-        except Exception as e:
-            print(f"Error searching emails with query '{query}': {e}")
-            return []
-
     def _get_email_message(
         self,
         message_id: str,
@@ -231,45 +168,6 @@ class GmailReader:
         except Exception as e:
             print(f"Error processing email {message_id}: {e}")
             return None
-
-    def _generate_activity_summary(
-        self, emails: List[EmailMessage], summary_by_sender: Dict
-    ) -> str:
-        """
-        Generate a human-readable summary of recent email activity.
-
-        Args:
-            emails (List[EmailMessage]): List of email messages.
-            summary_by_sender (Dict): Dictionary grouping emails by sender.
-
-        Returns:
-            str: Summary of recent activity.
-        """
-        if not emails:
-            return "No recent email activity."
-
-        # Count emails by sender
-        sender_counts = {
-            sender: len(email_list) for sender, email_list in summary_by_sender.items()
-        }
-
-        # Get top senders
-        top_senders = sorted(sender_counts.items(), key=lambda x: x[1], reverse=True)[
-            :3
-        ]
-
-        # Count urgent emails
-        urgent_count = len([e for e in emails if e.is_important])
-
-        summary_parts = [
-            f"You have {len(emails)} unread emails.",
-            f"Top senders: {', '.join([f'{sender} ({count})' for sender, count in top_senders])}.",
-        ]
-
-        if urgent_count > 0:
-            summary_parts.append(f"{urgent_count} emails are marked as important.")
-
-        return " ".join(summary_parts)
 
     def _get_header(self, headers: list, name: str):
         """
