@@ -1,13 +1,10 @@
-import os
-from typing import Optional
 import base64
 import mimetypes
-
+import os
+from email import message_from_bytes
 from email.message import EmailMessage
-from email.parser import BytesParser
-from email import message_from_bytes, policy
 from email.policy import default
-
+from typing import Optional
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -17,12 +14,30 @@ from src.gmail.GmailAuthenticator import auth_user
 
 class GmailWriter:
     def __init__(self, token_path):
-        """Initialize GmailWriter instance
+        """
+        Writer for Gmail that sends messages via the Gmail API.
+
+        This client wraps the Gmail API to create drafts, send messages, and reply to emails given a thread id.
 
         Args:
-            token_path (string): path to directory where user's gmail token.json file exists.
-            The file token.json stores the user's access and refresh tokens, and is created
-            automatically when the authorization flow completes for the first time.
+            token_path (str): Directory containing the user's Gmail OAuth tokens (e.g.,
+                `token.json`). Used by `auth_user` to obtain credentials.
+
+        Attributes:
+            path (str): Directory used to locate authentication tokens.
+            creds: Gmail API credentials object.
+            service: Gmail API service client object used to interact with the Gmail API.
+
+        Example:
+            writer = GmailWriter(token_path="/path/to/tokens")
+            draft = writer.create_draft(
+                sender="user@example.com",
+                recipient="recipient@example.com",
+                subject="Test Email",
+                message="This is a test email",
+                attachment_path="/path/to/attachment.pdf"
+            )
+            writer.send_draft(draft)
         """
         self.token_path = token_path
         self.creds = auth_user(self.token_path)
@@ -37,20 +52,20 @@ class GmailWriter:
         attachment_path: Optional[str] = None,
     ) -> Optional[dict]:
         """
-        Create a draft email message.
+        Create a draft email message dictionary given the sender, recipient, subject, message, and optional attachment path. Dictionary is in the format of {"raw": "base64_encoded_message"}.
 
         Args:
             sender (str): The email address of the sender.
             recipient (str): The email address of the recipient.
-            subject (str): The subject of the email.
+            subject (str): The subject line of the email.
             message (str): The body of the email.
             attachment_path (Optional[str], optional): The path to the attachment. Defaults to None.
 
         Returns:
-            Optional[dict]: The draft email message.
+            Optional[dict]: The encoded draft email message.
         """
         try:
-
+            # create unencoded draft object
             draft = EmailMessage()
 
             draft.set_content(message)
@@ -59,18 +74,15 @@ class GmailWriter:
             draft["From"] = sender
             draft["Subject"] = subject
 
+            # if attachment_path is provided, add it to the unencoded draft
             if attachment_path:
-                # guess the MIME type of the attachment
                 type_subtype, _ = mimetypes.guess_type(attachment_path)
                 if type_subtype is None:
-                    # Default to application/octet-stream if type cannot be guessed
                     main_type, sub_type = "application", "octet-stream"
                 else:
                     main_type, sub_type = type_subtype.split("/")
 
-                # get filename
                 filename = os.path.basename(attachment_path)
-                print(filename)
 
                 with open(attachment_path, "rb") as fp:
                     draft.add_attachment(
@@ -80,7 +92,7 @@ class GmailWriter:
                         filename=filename,
                     )
 
-            # encode message
+            # encode draft
             raw_bytes = base64.urlsafe_b64encode(draft.as_bytes())
             raw_str = raw_bytes.decode()
 
@@ -92,10 +104,10 @@ class GmailWriter:
 
     def send_draft_slack(self, draft):
         """
-        Send a draft email message to Slack.
+        Send email draft as a message to Slack.
 
         Args:
-            draft (dict): The draft email message with 'raw' field.
+            draft (dict): The draft email message.
 
         Returns:
             dict: The sent message details.
@@ -104,10 +116,10 @@ class GmailWriter:
 
     def send_draft(self, draft):
         """
-        Send a draft email message to recipient.
+        Send a draft email message to recipient. Sent message details are reflected in users Gmail sent folder.
 
         Args:
-            draft (dict): The draft email message with 'raw' field.
+            draft (dict): The draft email message dictionary in the format of {"raw": "base64_encoded_message"}.
 
         Returns:
             dict: The sent message details.
@@ -120,6 +132,17 @@ class GmailWriter:
         return send_message
 
     def send_reply(self, original_message, reply_message):
+        """
+        Send a reply to an original email message given the thread id.
+
+        Args:
+            original_message (dict): The original email message dictionary in the format of {"payload": {"headers": [{"name": "From", "value": "sender@example.com"}, {"name": "Subject", "value": "Test Email"}, {"name": "Message-ID", "value": "1234567890"}, {"name": "To", "value": "recipient@example.com"}]}}.
+            reply_message (str): The reply message body.
+
+        Returns:
+            dict: The sent message details.
+        """
+        # get headers
         headers = original_message["payload"]["headers"]
         to_address = next(
             header["value"] for header in headers if header["name"] == "From"
@@ -130,38 +153,29 @@ class GmailWriter:
         message_id = next(
             header["value"] for header in headers if header["name"] == "Message-ID"
         )
-
-        # Extracting the original recipient (your email) from the 'To' header of the original email
-        # This assumes the original email was sent to 'me'.
         my_email_address = next(
             header["value"] for header in headers if header["name"] == "To"
         )
 
-        # Constructing the reply subject
+        # reply subject logic
         if not subject.startswith("Re:"):
             reply_subject = f"Re: {subject}"
         else:
             reply_subject = subject
 
-        # Create the email message
+        # create reply email message
         message = EmailMessage()
         message["to"] = to_address
-        message["from"] = my_email_address  # Your email address
+        message["from"] = my_email_address
         message["subject"] = reply_subject
         message["In-Reply-To"] = message_id
-        message["References"] = message_id  # Important for threading
+        message["References"] = message_id
 
-        # Add the reply text
         message.set_content(reply_message)
 
-        # The threadId is crucial for keeping replies in the same conversation.
-        # It comes from the original message.
-        thread_id = original_message["threadId"]
-
-        # Encode the message to base64url format
+        # encode and send reply message
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
-        # send message
         try:
             message = (
                 self.service.users()
@@ -176,39 +190,17 @@ class GmailWriter:
             print(f"An error occurred while sending reply: {error}")
             return None
 
-    def _get_unread_message_id(self):
-        """
-        Return message id's of unread emails messages in inbox
-
-        Returns:
-            list: list of unread email message id's
-        """
-
-        try:
-            result = (
-                self.service.users()
-                .messages()
-                .list(userId="me", q="is:unread in:inbox")
-                .execute()
-            )
-            message = result.get("messages", [])
-            unread_id = message["id"]
-            return unread_id
-
-        except HttpError as error:
-            print(f"An error occurred while fetching unread messages: {error}")
-            return None
-
     def save_draft(self, draft):
         """
-        Saves a draft email message.
+        Saves a draft email dictionary object into user's Gmail drafts folder.
 
         Args:
-            draft (dict): The draft email message with 'raw' field.
+            draft (dict): The draft email message dictionary in the format of {"raw": "base64_encoded_message"}.
+
+        Returns:
+            print: Success message if draft is saved successfully.
         """
         try:
-            # The Gmail API expects the draft in this format:
-            # {"message": {"raw": "base64_encoded_message"}}
             create_draft = {"message": {"raw": draft["raw"]}}
 
             saved_draft = (
@@ -223,50 +215,20 @@ class GmailWriter:
             print(f"An error occurred while saving draft: {error}")
             return None
 
-    def _get_message_details(self, message_id):
-        """
-        Retrieves message details of specified message
-
-        Args:
-            message_id (str): email message id
-
-        Returns:
-            dict: Full message details are returned as dict.
-        """
-
-        try:
-            message_details = (
-                self.service.users()
-                .messages()
-                .get(userId="me", id=message_id, format="full")
-                .execute()
-            )
-            print(f"Successfully retrieved email with ID: {message_id}")
-            return message_details
-
-        except HttpError as error:
-            print(f"An error occurred while retrieving email {message_id}: {error}")
-            return None
-
     def _email_message_decoder(self, raw_str):
-        """Decodes a base64 encoded email and extracts its plain text body.
+        """Decodes a base64 encoded email draft dictionary and extracts its plain text body. Utilized by send_draft_slack.
 
         Args:
-            raw_str: A URL-safe base64 encoded string representing the raw email.
+            raw_str: A URL-safe base64 encoded string representing the raw email draft dictionary in the format of {"raw": "base64_encoded_message"}.
 
         Returns:
-            The plain text body of the email.
+            The plain text body of the email draft.
         """
-        # 1. Decode the base64 string back to bytes.
-        # The raw string is URL-safe, so we use urlsafe_b64decode.
+        # decode the base64 string
         raw_bytes = base64.urlsafe_b64decode(raw_str["raw"])
 
-        # 2. Parse the bytes into an EmailMessage object.
-        # We use message_from_bytes to reconstruct the email structure.
-        # The 'default' policy is a good choice for handling modern email formats.
         email_message = message_from_bytes(raw_bytes, policy=default)
 
-        # Get the plain text body safely
         body_part = email_message.get_body(preferencelist=("plain",))
         body_content = body_part.get_content() if body_part is not None else ""
 
@@ -278,11 +240,8 @@ class GmailWriter:
             "attachment": [],
         }
 
+        # add attachments to details if applicable
         for part in email_message.iter_attachments():
-            # attachment_data = {
-            #     "filename": part.get_filename(),
-            #     # "content": part.get_payload(decode=True)
-            # }
             details["attachment"].append(part.get_filename())
 
         return details
