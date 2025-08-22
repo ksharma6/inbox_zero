@@ -4,8 +4,9 @@ from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
-from src.gmail.GmailAuthenticator import auth_user
 from src.models.gmail import EmailMessage
+
+from .GmailAuthenticator import auth_user
 
 
 class GmailReader:
