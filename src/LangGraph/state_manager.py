@@ -1,6 +1,7 @@
 import pickle
-from typing import Optional, Dict
 from datetime import datetime
+from typing import Dict, Optional
+
 from src.models.agent import GmailAgentState
 
 
@@ -87,35 +88,35 @@ class StateManager:
             print(f"Error loading state for user {user_id}: {e}")
             return None
 
-    def delete_state(self, user_id: str) -> bool:
-        """
-        Delete state for a user
+    # def delete_state(self, user_id: str) -> bool:
+    #     """
+    #     Delete state for a user
 
-        Args:
-            user_id: User ID to delete state for
+    #     Args:
+    #         user_id: User ID to delete state for
 
-        Returns:
-            True if deleted, False if not found
-        """
-        try:
-            if self.storage_backend == "memory":
-                if user_id in self._memory_store:
-                    del self._memory_store[user_id]
-                    return True
-            elif self.storage_backend == "file":
-                return self._delete_file(user_id)
-            return False
-        except Exception as e:
-            print(f"Error deleting state for user {user_id}: {e}")
-            return False
+    #     Returns:
+    #         True if deleted, False if not found
+    #     """
+    #     try:
+    #         if self.storage_backend == "memory":
+    #             if user_id in self._memory_store:
+    #                 del self._memory_store[user_id]
+    #                 return True
+    #         elif self.storage_backend == "file":
+    #             return self._delete_file(user_id)
+    #         return False
+    #     except Exception as e:
+    #         print(f"Error deleting state for user {user_id}: {e}")
+    #         return False
 
-    def list_states(self) -> list[str]:
-        """List all user IDs with saved states"""
-        if self.storage_backend == "memory":
-            return list(self._memory_store.keys())
-        elif self.storage_backend == "file":
-            return self._list_files()
-        return []
+    # def list_states(self) -> list[str]:
+    #     """List all user IDs with saved states"""
+    #     if self.storage_backend == "memory":
+    #         return list(self._memory_store.keys())
+    #     elif self.storage_backend == "file":
+    #         return self._list_files()
+    #     return []
 
 
 # Global state manager instance

@@ -1,19 +1,18 @@
+import os
+
+from openai import OpenAI
 from slack_bolt import App as SlackApp
 
+from src.gmail import GmailReader, GmailWriter
 from src.LangGraph.workflow import EmailProcessingWorkflow
-from src.gmail.GmailReader import GmailReader
-from src.gmail.GmailWriter import GmailWriter
 from src.slack.DraftApprovalHandler import DraftApprovalHandler
-from openai import OpenAI
-import os
 
 
 def get_workflow():
-    """Initializes workflow object with dependencies in user environment
+    """Initializes workflow object with dependencies in user environment .env file.
 
     Function creates and configures an EmailProcessingWorkflow instance with all
-    necessary dependencies including Gmail reader/writer, Slack integration, and OpenAI client.
-    It automatically loads configuration from environment variables.
+    necessary dependencies including GmailReader, GmailWriter, Slack integration, and OpenAI client.
 
     Environment Variables Required:
         - TOKENS_PATH: Path to Gmail authentication tokens
@@ -22,6 +21,10 @@ def get_workflow():
 
     Returns:
         EmailProcessingWorkflow: A configured workflow instance with all dependencies
+
+    Example:
+        workflow = get_workflow()
+        workflow.run()
     """
     gmail_token = os.getenv("TOKENS_PATH")
     gmail_writer = GmailWriter(gmail_token)
