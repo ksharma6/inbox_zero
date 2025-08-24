@@ -6,15 +6,19 @@ from src.models.agent import GmailAgentState
 
 
 class StateManager:
-    """Custom state manager for LangGraph workflow state serialization"""
+    """
+    Custom state manager for LangGraph workflow state serialization. Presently only supports memeory and file backend storage.
+
+    Args:
+        storage_backend: The storage backend to use ["memory", "file"]
+
+    Example:
+        state_manager = StateManager(storage_backend="memory")
+        state_manager.save_state(state)
+        state_manager.load_state(user_id)
+    """
 
     def __init__(self, storage_backend: str = "memory"):
-        """
-        Initialize state manager
-
-        Args:
-            storage_backend: "memory", "file", or "redis" (future enhancement)
-        """
         self.storage_backend = storage_backend
         self._memory_store: Dict[str, bytes] = {}
 
@@ -24,16 +28,18 @@ class StateManager:
 
         Args:
             state: GmailAgentState object to save
+
+        Raises:
+            ValueError: If the state is not a GmailAgentState object
         """
         if not isinstance(state, GmailAgentState):
             raise ValueError(f"Expected GmailAgentState, got {type(state)}")
 
-        # Serialize with metadata for type safety
         serialized_data = {
             "type": "GmailAgentState",
             "version": "1.0",
             "timestamp": datetime.now().isoformat(),
-            "data": state.model_dump(),  # Use Pydantic's built-in serialization
+            "data": state.model_dump(),
         }
 
         serialized_bytes = pickle.dumps(serialized_data)
@@ -42,7 +48,6 @@ class StateManager:
             self._memory_store[state.user_id] = serialized_bytes
         elif self.storage_backend == "file":
             self._save_to_file(state.user_id, serialized_bytes)
-        # Future: Add Redis, database, etc.
 
     def load_state(self, user_id: str) -> Optional[GmailAgentState]:
         """
@@ -53,6 +58,10 @@ class StateManager:
 
         Returns:
             GmailAgentState object or None if not found
+
+        Raises:
+            ValueError: If the serialized data is not a dictionary
+            ValueError: If the serialized data is not a GmailAgentState object
         """
         try:
             if self.storage_backend == "memory":
@@ -65,10 +74,9 @@ class StateManager:
             if not serialized_bytes:
                 return None
 
-            # Deserialize with type checking
+            # deserialize with type checking and validate
             serialized_data = pickle.loads(serialized_bytes)
 
-            # Validate the serialized data
             if not isinstance(serialized_data, dict):
                 raise ValueError("Invalid serialized state format")
 
@@ -77,10 +85,9 @@ class StateManager:
                     f"Expected GmailAgentState, got {serialized_data.get('type')}"
                 )
 
-            # Reconstruct the state object
+            # reconstruct the state object
             state_data = serialized_data["data"]
 
-            # Handle nested LangGraph state structure
             actual_state = extract_langgraph_state(state_data)
             return GmailAgentState(**actual_state)
 
@@ -88,61 +95,31 @@ class StateManager:
             print(f"Error loading state for user {user_id}: {e}")
             return None
 
-    # def delete_state(self, user_id: str) -> bool:
-    #     """
-    #     Delete state for a user
-
-    #     Args:
-    #         user_id: User ID to delete state for
-
-    #     Returns:
-    #         True if deleted, False if not found
-    #     """
-    #     try:
-    #         if self.storage_backend == "memory":
-    #             if user_id in self._memory_store:
-    #                 del self._memory_store[user_id]
-    #                 return True
-    #         elif self.storage_backend == "file":
-    #             return self._delete_file(user_id)
-    #         return False
-    #     except Exception as e:
-    #         print(f"Error deleting state for user {user_id}: {e}")
-    #         return False
-
-    # def list_states(self) -> list[str]:
-    #     """List all user IDs with saved states"""
-    #     if self.storage_backend == "memory":
-    #         return list(self._memory_store.keys())
-    #     elif self.storage_backend == "file":
-    #         return self._list_files()
-    #     return []
-
-
-# Global state manager instance
-state_manager = StateManager()
-
 
 def extract_langgraph_state(state_dict: dict) -> dict:
     """
-    Extract the actual state from LangGraph's nested dictionary structure
+    Extract the current state from LangGraph's nested dictionary structure
 
     Args:
         state_dict: Dictionary that might be nested from LangGraph
 
     Returns:
-        Flat dictionary with the actual state data
+        Flat dictionary with the current state data
     """
     if (
         isinstance(state_dict, dict)
         and len(state_dict) == 1
         and isinstance(next(iter(state_dict.values())), dict)
     ):
-        # LangGraph nested structure: {'node_name': {'actual_state': 'data'}}
+        # LangGraph nested structure: {'node_name': {'current_state': 'data'}}
         return next(iter(state_dict.values()))
     else:
         # Direct state structure
         return state_dict
+
+
+# global state manager instance used for saving and loading state
+state_manager = StateManager()
 
 
 # helper functions for backward compatibility
