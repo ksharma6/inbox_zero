@@ -1,22 +1,39 @@
-import uuid
 import datetime
+import json
+import uuid
+from typing import Dict, List
 
-from typing import Dict, Any, List
-from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import MemorySaver
 from openai import OpenAI
 
+from langgraph.graph import END, StateGraph
+from src.gmail import GmailReader, GmailWriter
 from src.models.agent import GmailAgentState
-from src.gmail.GmailReader import GmailReader
-from src.gmail.GmailWriter import GmailWriter
+from src.models.gmail import EmailSummary
 from src.slack.DraftApprovalHandler import DraftApprovalHandler
 
-from .state_manager import save_state_to_store, load_state_from_store
+from .state_manager import save_state_to_store
 
 
 class EmailProcessingWorkflow:
-    """LangGraph workflow for processing emails and generating draft responses"""
+    """LangGraph workflow for processing/summarizing emails and generating draft responses to send to user via Slack.
+
+    Please note that user must have api keys and paths for GMail credentials in .env file.
+
+    Args:
+        gmail_reader: GmailReader object
+        gmail_writer: GmailWriter object
+        draft_handler: DraftApprovalHandler object
+        openai_client: OpenAI object
+
+    Example:
+        workflow = EmailProcessingWorkflow(
+            gmail_reader=GmailReader(),
+            gmail_writer=GmailWriter(),
+            draft_handler=DraftApprovalHandler(),
+            openai_client=OpenAI(),
+        )
+        workflow.run()
+    """
 
     def __init__(
         self,
@@ -30,14 +47,24 @@ class EmailProcessingWorkflow:
         self.draft_handler = draft_handler
         self.openai_client = openai_client
 
-        # Create the workflow graph
         self.workflow = self._create_workflow()
 
     def _create_workflow(self):
-        """Create the LangGraph workflow"""
+        """Create and return the compiled LangGraph workflow
+
+        The workflow is a state machine that processes emails and generates draft responses using the following nodes:
+        - read_unread_emails: reads last 5 unread emails from user's Gmail account using GmailReader
+        - generate_email_summary: generates a high-level summary of unread emails using OpenAI
+        - process_emails_for_drafts: analyzes emails and determines which need draft responses using OpenAI
+        - create_draft_responses: creates draft responses for emails that need them using OpenAI
+        - send_drafts_to_slack: sends draft responses to Slack for approval using DraftApprovalHandler
+        - wait_for_user_action: waits for user action to continue the workflow
+
+        Returns:
+            workflow: compiled LangGraph workflow
+        """
         workflow = StateGraph(GmailAgentState)
 
-        # Add nodes
         workflow.add_node("read_unread_emails", self._read_unread_emails)
         workflow.add_node("generate_email_summary", self._generate_email_summary)
         workflow.add_node("process_emails_for_drafts", self._process_emails_for_drafts)
@@ -46,16 +73,14 @@ class EmailProcessingWorkflow:
         workflow.add_node("wait_for_user_action", self._wait_for_user_action)
         workflow.add_node("send_final_summary", self._send_final_summary)
 
-        # Set entry point - where the workflow starts
         workflow.set_entry_point("read_unread_emails")
 
-        # Add edges
         workflow.add_edge("read_unread_emails", "generate_email_summary")
         workflow.add_edge("generate_email_summary", "process_emails_for_drafts")
         workflow.add_edge("process_emails_for_drafts", "create_draft_responses")
         workflow.add_edge("create_draft_responses", "send_drafts_to_slack")
 
-        # Conditional edges for send_drafts_to_slack
+        # conditional edges - user input required for approval
         workflow.add_conditional_edges(
             "send_drafts_to_slack",
             lambda state: state.current_draft_index >= len(state.draft_responses),
@@ -65,7 +90,6 @@ class EmailProcessingWorkflow:
             },
         )
 
-        # Conditional edges for wait_for_user_action
         workflow.add_conditional_edges(
             "wait_for_user_action",
             lambda state: state.awaiting_approval == False,
@@ -77,27 +101,40 @@ class EmailProcessingWorkflow:
 
         workflow.add_edge("send_final_summary", END)
 
-        # Compile the workflow
         return workflow.compile()
 
     def _read_unread_emails(self, state: GmailAgentState) -> GmailAgentState:
-        # Fetch unread emails as usual
+        """Read last 5 unread emails from user's Gmail account
+
+        Args:
+            state: GmailAgentState object
+
+        Returns:
+            GmailAgentState object with unread_emails list
+        """
         unread_emails = self.gmail_reader.read_emails(
             count=5, unread_only=True, include_body=True, primary_only=True
         )
-        # For each thread, get only the 4 most recent emails
+        # for each email thread, get only the 4 most recent emails
         recent_emails = []
         for email in unread_emails:
             thread_emails = self.gmail_reader.get_recent_emails_in_thread(
                 email.thread_id, count=4
             )
             recent_emails.extend(thread_emails)
-        # Remove duplicates if any
+
         state.unread_emails = list({e.id: e for e in recent_emails}.values())
         return state
 
     def _generate_email_summary(self, state: GmailAgentState) -> GmailAgentState:
-        """Generate a high-level summary of unread emails"""
+        """Generate a high-level summary of unread emails using OpenAI
+
+        Args:
+            state: GmailAgentState object
+
+        Returns:
+            GmailAgentState object with email_summary object
+        """
         try:
             if not state.unread_emails:
                 state.email_summary = None
@@ -105,10 +142,8 @@ class EmailProcessingWorkflow:
 
             print("Generating email summary...")
 
-            # Create summary using OpenAI
-            emails_text = self._format_emails_for_summary(
-                state.unread_emails[:3]
-            )  # Only summarize 3 emails
+            # Create summary using OpenAI and summarizing only 3 emails
+            emails_text = self._format_emails_for_summary(state.unread_emails[:3])
 
             prompt = f"""
             You are an email assistant. Please provide a high-level summary of the following unread emails.
@@ -132,9 +167,6 @@ class EmailProcessingWorkflow:
 
             summary_text = response.choices[0].message.content
 
-            # Create EmailSummary object
-            from src.models.gmail import EmailSummary
-
             state.email_summary = EmailSummary(
                 total_unread=len(state.unread_emails),
                 emails=state.unread_emails,
@@ -152,14 +184,20 @@ class EmailProcessingWorkflow:
         return state
 
     def _process_emails_for_drafts(self, state: GmailAgentState) -> GmailAgentState:
-        """Analyze emails and determine which need draft responses"""
+        """Analyze emails and determine which need draft responses using OpenAI
+
+        Args:
+            state: GmailAgentState object
+
+        Returns:
+            GmailAgentState object with processed_emails list
+        """
         try:
             if not state.unread_emails:
                 return state
 
             print("Processing emails for draft responses...")
 
-            # Use OpenAI to analyze which emails need responses
             emails_text = self._format_emails_for_analysis(state.unread_emails)
 
             prompt = f"""
@@ -198,15 +236,12 @@ class EmailProcessingWorkflow:
                 max_tokens=1000,
             )
 
-            import json
-
             content = response.choices[0].message.content
             if content:
                 analysis = json.loads(content)
             else:
                 analysis = {"emails_to_respond": []}
 
-            # Store the analysis in state
             state.processed_emails = analysis.get("emails_to_respond", [])
 
             print(f"Identified {len(state.processed_emails)} emails needing responses")
@@ -218,7 +253,14 @@ class EmailProcessingWorkflow:
         return state
 
     def _create_draft_responses(self, state: GmailAgentState) -> GmailAgentState:
-        """Create draft responses for emails that need them"""
+        """Create draft responses for emails that have been determined to need them using OpenAI
+
+        Args:
+            state: GmailAgentState object
+
+        Returns:
+            GmailAgentState object with draft_responses list
+        """
         try:
             if not state.processed_emails:
                 return state
@@ -271,7 +313,15 @@ class EmailProcessingWorkflow:
         return state
 
     def _send_drafts_to_slack(self, state: GmailAgentState) -> GmailAgentState:
-        TIMEOUT_SECONDS = 300  # 5 minutes
+        """Send draft responses to Slack for approval
+
+        Args:
+            state: GmailAgentState object
+
+        Returns:
+            GmailAgentState object with awaiting_approval and current_draft_index
+        """
+        TIMEOUT_SECONDS = 3600  # 1 hour
 
         if not state.draft_responses or state.current_draft_index >= len(
             state.draft_responses
@@ -281,44 +331,49 @@ class EmailProcessingWorkflow:
 
         if state.awaiting_approval:
             now = datetime.datetime.now()
-            # If timeout has passed, proceed as if user did not respond
             if (now - state.awaiting_approval_since).total_seconds() > TIMEOUT_SECONDS:
-                # Handle timeout (e.g., auto-save, skip, etc.)
                 state.awaiting_approval = False
                 state.current_draft_index += 1
             return state
 
-        # Send the next draft for approval
         draft_info = state.draft_responses[state.current_draft_index]
 
-        # Send draft for approval using DraftApprovalHandler
         draft_id = self.draft_handler.send_draft_for_approval(
             draft=draft_info["draft"],
             user_id=state.user_id,
         )
 
-        # Store the draft_id in state for reference
         if draft_id:
             state.current_draft_id = draft_id
 
         state.awaiting_approval = True
         state.awaiting_approval_since = datetime.datetime.now()
-        # Save state and exit workflow here (do not continue)
         save_state_to_store(state)
-        return state  # This pauses the workflow
+        return state
 
     def _wait_for_user_action(self, state: GmailAgentState) -> GmailAgentState:
-        # This node just checks if the user has acted
-        # If not, return state (pause)
-        # If yes, set awaiting_approval = False, increment index, and allow transition
+        """Wait for user action to continue the workflow
+
+        Args:
+            state: GmailAgentState object
+
+        Returns:
+            GmailAgentState object
+        """
         return state
 
     def _send_final_summary(self, state: GmailAgentState) -> GmailAgentState:
-        """Send final summary to the user"""
+        """Send final summary to the user summarizing the workflow and any errors
+
+        Args:
+            state: GmailAgentState object
+
+        Returns:
+            GmailAgentState object
+        """
         try:
             print("Sending final summary...")
 
-            # Create final summary message
             summary_parts = []
 
             if state.email_summary:
@@ -343,11 +398,8 @@ class EmailProcessingWorkflow:
                 "\n".join(summary_parts) if summary_parts else "No emails processed."
             )
 
-            # Send summary to Slack
             try:
                 target = state.user_id
-                # You'll need to implement this method in your Slack handler
-                # self.slack_handler.send_message(target, final_summary)
                 print(f"Final summary:\n{final_summary}")
 
             except Exception as e:
@@ -362,14 +414,21 @@ class EmailProcessingWorkflow:
         return state
 
     def _format_emails_for_summary(self, emails: List) -> str:
-        """Format emails for summary generation"""
+        """Format emails for summary generation
+
+        Args:
+            emails: list of Email objects
+
+        Returns:
+            formatted string of emails
+        """
         formatted = []
-        for i, email in enumerate(emails, 1):  # Limit to 5 for summary
+        for i, email in enumerate(emails, 1):
             formatted.append(f"{i}. From: {email.from_email}")
             formatted.append(f"   Subject: {email.subject}")
             formatted.append(f"   Date: {email.date}")
             formatted.append(f"   Important: {email.is_important}")
-            formatted.append(f"   Body: {email.body[:300]}...")  # Only first 300 chars
+            formatted.append(f"   Body: {email.body[:300]}...")
             formatted.append("")
         return "\n".join(formatted)
 
@@ -382,14 +441,19 @@ class EmailProcessingWorkflow:
             formatted.append(f"Subject: {email.subject}")
             formatted.append(f"Date: {email.date}")
             formatted.append(f"Important: {email.is_important}")
-            formatted.append(
-                f"Body: {email.body[:500]}"
-            )  # Only send first 500 characters
+            formatted.append(f"Body: {email.body[:500]}")
             formatted.append("---")
         return "\n".join(formatted)
 
     def _group_by_sender(self, emails: List) -> Dict:
-        """Group emails by sender"""
+        """Group emails by sender
+
+        Args:
+            emails: list of Email objects
+
+        Returns:
+            dictionary of emails grouped by sender
+        """
         groups = {}
         for email in emails:
             sender = email.from_email
@@ -399,7 +463,15 @@ class EmailProcessingWorkflow:
         return groups
 
     def _generate_draft_response(self, email, email_info: Dict) -> str:
-        """Generate draft response content using OpenAI"""
+        """Generate draft response content using OpenAI
+
+        Args:
+            email: Email object
+            email_info: dictionary of email information
+
+        Returns:
+            draft response content
+        """
         prompt = f"""
         You are a professional email assistant. Generate a draft response for this email.
         
@@ -433,7 +505,14 @@ class EmailProcessingWorkflow:
         return content or "No response generated"
 
     def run(self, user_id: str) -> GmailAgentState:
-        """Run the email processing workflow"""
+        """Run the email processing workflow
+
+        Args:
+            user_id: string of user id
+
+        Returns:
+            GmailAgentState object
+        """
         thread_id = str(uuid.uuid4())
 
         initial_state = GmailAgentState(
@@ -441,7 +520,7 @@ class EmailProcessingWorkflow:
             thread_id=thread_id,
         )
 
-        # Run the workflow
+        # run the workflow
         result_gen = self.workflow.stream(initial_state)
 
         for state in result_gen:
