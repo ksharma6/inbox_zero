@@ -2,14 +2,15 @@ import os
 
 from flask import Flask
 from slack_bolt import App as SlackApp
-from src.utils.load_env import load_dotenv_helper
+
 from src.LangGraph.workflow_factory import get_workflow
 from src.routes.flask.flask_routes import register_flask_routes
 from src.routes.slack.slack_routes import register_slack_routes
+from src.utils.load_env import load_dotenv_helper
 
 app = Flask(__name__)
 
-load_dotenv_helper(path="/Users/ksharma6/Documents/projects/inbox_zero/")
+load_dotenv_helper()
 
 slack_app = SlackApp(
     token=os.getenv("SLACK_BOT_TOKEN"),

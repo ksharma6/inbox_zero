@@ -1,12 +1,15 @@
 from pathlib import Path
-import os
+
 from dotenv import load_dotenv
 
-def load_dotenv_helper(path = None):
-    if load_dotenv(path):
+
+def load_dotenv_helper():
+    """Load the .env file from the current working directory or the project root directory."""
+
+    if load_dotenv():
         print("Successfully loaded .env (default search).")
     else:
-        project_root_env_alt = Path.cwd() / ".env" 
+        project_root_env_alt = Path.cwd() / ".env"
         if project_root_env_alt.exists():
             load_dotenv(dotenv_path=project_root_env_alt)
             print(f"Loaded .env from CWD: {project_root_env_alt}")
