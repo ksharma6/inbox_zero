@@ -137,8 +137,3 @@ curl -X POST http://localhost:5002/resume_workflow \
 ### Security
 - Do not commit `credentials.json` or `token.json`
 - Keep API keys in `.env` or your secret manager
-
-### License
-Add your license here.
-
-
