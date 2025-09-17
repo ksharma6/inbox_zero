@@ -6,7 +6,11 @@ An AI assistant that reads your Gmail, summarizes your day’s to‑dos, and dra
 
 1) Prerequisites
 - Python 3.11+
-- A Google Cloud project with Gmail API enabled
+- Google OAuth setup (Gmail)
+  - In Google Cloud Console: enable Gmail API
+  - Create OAuth client credentials and download `credentials.json`
+  - Place `credentials.json` in the directory pointed to by `TOKENS_PATH`
+  - First run will perform OAuth and create `token.json` in the same folder
 - A Slack App (Bot) installed to your workspace
 - An OpenAI API key
 
@@ -28,13 +32,7 @@ SLACK_SIGNING_SECRET=...
 TOKENS_PATH=/absolute/path/to/inbox_zero/tokens/
 ```
 
-4) Google OAuth setup (Gmail)
-- In Google Cloud Console: enable Gmail API
-- Create OAuth client credentials and download `credentials.json`
-- Place `credentials.json` in the directory pointed to by `TOKENS_PATH`
-- First run will perform OAuth and create `token.json` in the same folder
-
-5) Slack App setup
+4) Slack App setup
 - Create a Slack App (from scratch) and add a Bot user
 - OAuth scopes (typical):
   - chat:write
@@ -45,7 +43,7 @@ TOKENS_PATH=/absolute/path/to/inbox_zero/tokens/
 - Install the app to your workspace and copy the Bot Token and Signing Secret into `.env`
 - For local development, use a tunneling tool (e.g., ngrok) to expose `http://localhost:5002`
 
-6) Run the server
+5) Run the server
 ```bash
 python main.py
 # Server listens on http://localhost:5002
@@ -79,26 +77,38 @@ Slack endpoints used by the app
 ### Project structure (high level)
 ```
 inbox_zero/
-  main.py                  # Flask + Slack app bootstrap
-  src/
-    LangGraph/
-      workflow.py          # EmailProcessingWorkflow (LangGraph graph)
-      workflow_factory.py  # get_workflow() wiring Gmail, Slack, OpenAI
-      state_manager.py     # Persist/restore workflow state
-    gmail/
-      GmailReader.py       # Read/search Gmail
-      GmailWriter.py       # Create/send/save drafts, decode for Slack
-      GmailAuthenticator.py# OAuth flow (credentials.json/token.json)
-    slack/
-      DraftApprovalHandler.py # Slack interactive approvals
-      workflow_bridge.py      # Resume workflow after Slack action
-    routes/
-      flask_routes.py      # /start_workflow, /resume_workflow
-      slack/slack_routes.py# /slack/events, /slack/actions
-    models/
-      agent.py             # Pydantic state and schemas
-    utils/
-      load_env.py          # .env loader
+  main.py                    # Flask + Slack app bootstrap
+  src/  
+    agent/  
+      OpenAIAgent.py         # OpenAI tool-calling agent
+    gmail/  
+      GmailAuthenticator.py  # OAuth flow (credentials.json/token.json)
+      GmailReader.py         # Read/search Gmail
+      GmailWriter.py         # Create/send/save drafts, decode for Slack
+      GCalendar.py           # Google Calendar integration helpers
+    LangGraph/  
+      factory.py             # Helper factory utilities
+      workflow.py            # EmailProcessingWorkflow (LangGraph graph)
+      workflow_factory.py    # get_workflow() wiring Gmail, Slack, OpenAI
+      state_manager.py       # Persist/restore workflow state
+    models/  
+      agent.py               # Pydantic state and schemas
+      gmail.py               # Gmail-related models
+      slack.py               # Slack-related models
+      toolfunction.py        # Tool/function schema models
+    routes/  
+      flask/  
+        flask_routes.py      # /start_workflow, /resume_workflow
+      slack/  
+        slack_routes.py      # /slack/events, /slack/actions
+      slack_handlers.py      # Legacy/aux handlers
+    slack/  
+      DraftApprovalHandler.py   # Slack interactive approvals
+      SlackAuthenticator.py     # Slack auth helpers (if needed)
+      workflow_bridge.py        # Resume workflow after Slack action
+    utils/  
+      load_env.py            # .env loader
+      tests/                 # Utility tests
 ```
 
 ### How it works (architecture)
