@@ -1,0 +1,5 @@
+.env
+.venv
+.git
+.gitignore
+.pre-commit-config.yaml
