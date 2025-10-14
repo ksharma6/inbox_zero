@@ -1,14 +1,14 @@
 import os
 import uuid
-from typing import Dict, Optional
 from datetime import datetime, timedelta
+from typing import Dict, Optional
 
 from slack_bolt import App
-from slack_sdk.errors import SlackApiError
 from slack_bolt.context.ack import Ack
 from slack_bolt.context.say import Say
+from slack_sdk.errors import SlackApiError
 
-from src.gmail.GmailWriter import GmailWriter
+from src.gmail.gmail_writer import GmailWriter
 
 
 def get_draft_handler(slack_app):

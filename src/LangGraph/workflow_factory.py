@@ -5,7 +5,7 @@ from slack_bolt import App
 
 from src.gmail import GmailReader, GmailWriter
 from src.langgraph.workflow import EmailProcessingWorkflow
-from src.slack.DraftApprovalHandler import get_draft_handler
+from src.slack.draft_approval_handler import get_draft_handler
 
 
 def get_workflow(slack_app: App):

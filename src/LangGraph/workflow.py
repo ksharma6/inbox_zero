@@ -9,7 +9,7 @@ from langgraph.graph import END, StateGraph
 from src.gmail import GmailReader, GmailWriter
 from src.models.agent import GmailAgentState
 from src.models.gmail import EmailSummary
-from src.slack.DraftApprovalHandler import DraftApprovalHandler
+from src.slack.draft_approval_handler import DraftApprovalHandler
 
 from .state_manager import save_state_to_store
 

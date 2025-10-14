@@ -1,8 +1,6 @@
-from typing import Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
-
-from typing import Dict, List, Literal, Optional
 
 
 class ParamProperties(BaseModel):

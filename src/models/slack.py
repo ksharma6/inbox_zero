@@ -1,4 +1,4 @@
-from src.models.toolfunction import ToolFunction, ToolParams, ParamProperties
+from src.models.toolfunction import ParamProperties, ToolFunction, ToolParams
 
 
 class SlackToolFunction:
