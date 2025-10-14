@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 
 from src.models.gmail import EmailMessage
 
-from .GmailAuthenticator import auth_user
+from .gmail_authenticator import auth_user
 
 
 class GmailReader:

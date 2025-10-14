@@ -1,6 +1,6 @@
 from googleapiclient.discovery import build
 
-from .GmailAuthenticator import auth_user
+from .gmail_authenticator import auth_user
 
 
 class GCalendar:
