@@ -1,7 +1,8 @@
-from typing import List, Optional
-from datetime import datetime
+from typing import List
+
 from pydantic import BaseModel, Field
-from src.models.toolfunction import ToolFunction, ToolParams, ParamProperties
+
+from src.models.toolfunction import ParamProperties, ToolFunction, ToolParams
 
 
 class EmailHeader(BaseModel):

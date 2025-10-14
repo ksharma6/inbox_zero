@@ -4,7 +4,7 @@ from openai import OpenAI
 from slack_bolt import App as SlackApp
 
 from src.gmail import GmailReader, GmailWriter
-from src.LangGraph.workflow import EmailProcessingWorkflow
+from src.langgraph.workflow import EmailProcessingWorkflow
 from src.slack.DraftApprovalHandler import DraftApprovalHandler
 
 

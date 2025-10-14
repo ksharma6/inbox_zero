@@ -1,6 +1,8 @@
 import datetime
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Any
+
 from src.models.gmail import EmailMessage, EmailSummary
 
 
