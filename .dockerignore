@@ -1,5 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Secrets and tokens
 .env
-.venv
-.git
+tokens/
+*.json
+
+# Git and dev tools
+.git/
 .gitignore
+.gitattributes
 .pre-commit-config.yaml
+
+# Documentation and notebooks
+*.md
+notebooks/
+docdrafts/
