@@ -9,7 +9,7 @@ from typing import Optional
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from .GmailAuthenticator import auth_user
+from .gmail_authenticator import auth_user
 
 
 class GmailWriter:

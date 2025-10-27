@@ -3,7 +3,7 @@ import os
 from flask import Flask
 from slack_bolt import App as SlackApp
 
-from src.LangGraph.workflow_factory import get_workflow
+from src.langgraph.workflow_factory import get_workflow
 from src.routes.flask.flask_routes import register_flask_routes
 from src.routes.slack.slack_routes import register_slack_routes
 from src.utils.load_env import load_dotenv_helper
