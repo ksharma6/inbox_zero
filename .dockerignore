@@ -1,4 +1,4 @@
-# Python
+# Python Cache and Build Files
 __pycache__/
 *.pyc
 *.pyo
@@ -10,21 +10,25 @@ __pycache__/
 dist/
 build/
 .venv/
-venv/
-env/
 
-# Secrets and tokens
+# Venv and Environment Variables
+.venv/
 .env
 tokens/
 *.json
 
-# Git and dev tools
+# Git
 .git/
+.github/
 .gitignore
 .gitattributes
 .pre-commit-config.yaml
 
-# Documentation and notebooks
+# Documentation and Notebooks
 *.md
+*.ipynb
 notebooks/
 docdrafts/
+
+# Tests and Temporary Files
+tests/
