@@ -1,9 +1,11 @@
 #local files and API keys
 tokens/
+demos/
 .venv/
 .env
 docdrafts/
 template.txt
+.DS_Store
 
 # Jupyter Notebook checkpoints
 notebooks/
