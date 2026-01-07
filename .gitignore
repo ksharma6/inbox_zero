@@ -1,4 +1,4 @@
-#local files and API keys
+# Local files and API keys
 .DS_Store
 .env
 .venv/
