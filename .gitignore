@@ -1,15 +1,16 @@
 #local files and API keys
-tokens/
-demos/
-.venv/
-.env
-docdrafts/
-template.txt
 .DS_Store
+.env
+.venv/
+demos/
+docdrafts/
+logs/
+template.txt
+tokens/
 
 # Jupyter Notebook checkpoints
-notebooks/
 .ipynb_checkpoints
+notebooks/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
