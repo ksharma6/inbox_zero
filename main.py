@@ -32,11 +32,6 @@ workflow = get_workflow(slack_app)
 register_flask_routes(app, workflow)
 register_slack_routes(app, slack_app, workflow)
 
-# @atexit.register
-# def shutdown_log():
-#     logger.info("Application shutdown completed")
-
-
 if __name__ == "__main__":
     app.run(port=5002, debug=False)
     atexit.register(logger.info("Application shutdown completed"))
