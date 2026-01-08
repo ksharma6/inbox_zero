@@ -1,3 +1,5 @@
+import atexit
+import logging
 import os
 
 from flask import Flask
@@ -12,6 +14,15 @@ app = Flask(__name__)
 
 load_dotenv_helper()
 
+logging.basicConfig(
+    filename=os.getenv("LOG_FILE"),
+    encoding="utf-8",
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+logger.info("Starting the application")
+
 slack_app = SlackApp(
     token=os.getenv("SLACK_BOT_TOKEN"),
     signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
@@ -21,5 +32,11 @@ workflow = get_workflow(slack_app)
 register_flask_routes(app, workflow)
 register_slack_routes(app, slack_app, workflow)
 
+# @atexit.register
+# def shutdown_log():
+#     logger.info("Application shutdown completed")
+
+
 if __name__ == "__main__":
-    app.run(port=5002, debug=True)
+    app.run(port=5002, debug=False)
+    atexit.register(logger.info("Application shutdown completed"))
