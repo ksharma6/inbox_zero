@@ -1,6 +1,7 @@
 import atexit
 import logging
 import os
+from logging.handlers import TimedRotatingFileHandler
 
 from flask import Flask
 from slack_bolt import App as SlackApp
@@ -14,14 +15,20 @@ app = Flask(__name__)
 
 load_dotenv_helper()
 
-logging.basicConfig(
+handler = TimedRotatingFileHandler(
     filename=os.getenv("LOG_FILE"),
-    encoding="utf-8",
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    when="midnight",
+    interval=1,
+    backupCount=30,
 )
-logger = logging.getLogger(__name__)
-logger.info("Starting the application")
+handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+)
+
+root = logging.getLogger()
+root.setLevel(logging.INFO)
+root.addHandler(handler)
+root.info("Starting the application")
 
 slack_app = SlackApp(
     token=os.getenv("SLACK_BOT_TOKEN"),
@@ -34,4 +41,4 @@ register_slack_routes(app, slack_app, workflow)
 
 if __name__ == "__main__":
     app.run(port=5002, debug=False)
-    atexit.register(logger.info("Application shutdown completed"))
+    atexit.register(root.info("Application shutdown completed"))
