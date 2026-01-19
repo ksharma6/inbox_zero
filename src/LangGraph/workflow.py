@@ -63,7 +63,9 @@ class EmailProcessingWorkflow:
         Returns:
             workflow: compiled LangGraph workflow
         """
-        workflow = StateGraph(GmailAgentState)
+        workflow = StateGraph[GmailAgentState, None, GmailAgentState, GmailAgentState](
+            GmailAgentState
+        )
 
         workflow.add_node("read_unread_emails", self._read_unread_emails)
         workflow.add_node("generate_email_summary", self._generate_email_summary)
