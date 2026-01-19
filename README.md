@@ -101,7 +101,6 @@ inbox_zero/
         flask_routes.py      # /start_workflow, /resume_workflow
       slack/  
         slack_routes.py      # /slack/events, /slack/actions
-      slack_handlers.py      # Legacy/aux handlers
     slack/  
       DraftApprovalHandler.py   # Slack interactive approvals
       SlackAuthenticator.py     # Slack auth helpers (if needed)
