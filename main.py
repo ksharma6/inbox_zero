@@ -22,7 +22,10 @@ handler = TimedRotatingFileHandler(
     backupCount=30,
 )
 handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
+    )
 )
 
 root = logging.getLogger()
@@ -41,4 +44,4 @@ register_slack_routes(app, slack_app, workflow)
 
 if __name__ == "__main__":
     app.run(port=5002, debug=False)
-    atexit.register(root.info("Application shutdown completed"))
+    atexit.register(lambda: root.info("Application shutdown completed"))
