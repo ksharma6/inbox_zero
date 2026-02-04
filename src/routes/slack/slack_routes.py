@@ -9,11 +9,8 @@ from src.slack.workflow_bridge import resume_workflow_after_action
 def register_slack_routes(app, slack_app: SlackApp, workflow):
     @slack_app.action("approve_draft")
     def approve_draft_action(ack, body, respond):
-        print(f"DEBUG: approve_draft action received: {body}")
-        print(
-            f"DEBUG: Action value: {body.get('actions', [{}])[0].get('value', 'No value')}"
-        )
 
+        logging.info("approve_draft_action payload=%s", body)
         # Handle action via shared workflow's DraftApprovalHandler
         workflow.draft_handler.handle_approval_action(ack, body, respond)
 
@@ -23,7 +20,6 @@ def register_slack_routes(app, slack_app: SlackApp, workflow):
 
     @slack_app.action("reject_draft")
     def reject_draft_action(ack, body, respond):
-        # print(f"DEBUG: reject_draft action received: {body}")
         logging.info("reject_draft_action payload=%s", body)
         workflow.draft_handler.handle_approval_action(ack, body, respond)
         user_id = body["user"]["id"]
@@ -31,7 +27,6 @@ def register_slack_routes(app, slack_app: SlackApp, workflow):
 
     @slack_app.action("save_draft")
     def save_draft_action(ack, body, respond):
-        # print(f"DEBUG: save_draft action received: {body}")
         logging.info("save_draft_action payload=%s", body)
         workflow.draft_handler.handle_approval_action(ack, body, respond)
         user_id = body["user"]["id"]
@@ -40,16 +35,7 @@ def register_slack_routes(app, slack_app: SlackApp, workflow):
     @app.route("/slack/events", methods=["POST"])
     def slack_events():
         logging.info("Received Slack event request")
-        # print(f"DEBUG: Received Slack event request")
-        # print(f"DEBUG: Request method: {request.method}")
-        # print(f"DEBUG: Request headers: {dict(request.headers)}")
-        # print(f"DEBUG: Request URL: {request.url}")
-        # print(f"DEBUG: Request remote addr: {request.remote_addr}")
-        # print(
-        #     f"DEBUG: Slack signing secret exists: {bool(app.config.get('SLACK_SIGNING_SECRET'))}"
-        # )
-        # print(f"DEBUG: Content-Type: {request.headers.get('Content-Type', 'Not set')}")
-        # print(f"DEBUG: User-Agent: {request.headers.get('User-Agent', 'Not set')}")
+        logging.info("slack_events payload=%s", request.json)
 
         content_type = request.headers.get("Content-Type", "")
 
@@ -98,7 +84,6 @@ def register_slack_routes(app, slack_app: SlackApp, workflow):
             handler = SlackRequestHandler(slack_app)
             return handler.handle(request)
         except Exception as e:
-            # print(f"DEBUG: Error in slack_app handler: {e}")
             import traceback
 
             logging.error("Full traceback: %s", traceback.format_exc())
@@ -107,11 +92,6 @@ def register_slack_routes(app, slack_app: SlackApp, workflow):
     @app.route("/slack/actions", methods=["POST"])
     def slack_actions():
         logging.info("Received Slack action request")
-        # print(f"DEBUG: Received Slack action request")
-        # print(f"DEBUG: Request method: {request.method}")
-        # print(f"DEBUG: Request headers: {dict(request.headers)}")
-        # print(f"DEBUG: Request URL: {request.url}")
-        # print(f"DEBUG: Content-Type: {request.headers.get('Content-Type', 'Not set')}")
 
         if request.form:
             logging.info("Form data: %s", dict(request.form))
