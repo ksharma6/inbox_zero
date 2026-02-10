@@ -1,8 +1,10 @@
-from src.langgraph.state_manager import (extract_langgraph_state,
-                                         load_state_from_store,
-                                         save_state_to_store)
-from src.langgraph.workflow import EmailProcessingWorkflow
 from src.models.agent import GmailAgentState
+from src.workflows.state_manager import (
+    extract_langgraph_state,
+    load_state_from_store,
+    save_state_to_store,
+)
+from src.workflows.workflow import EmailProcessingWorkflow
 
 
 def resume_workflow_after_action(

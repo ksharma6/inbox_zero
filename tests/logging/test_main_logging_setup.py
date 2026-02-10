@@ -1,17 +1,12 @@
 import importlib
 import logging
-import os
-import sys
 from logging.handlers import TimedRotatingFileHandler
-from pathlib import Path
 
 
 def test_main_logging_setup(tmp_path, monkeypatch):
     """
     Test logging setup in main.py
     """
-    project_root = Path(__file__).resolve().parents[2]
-    sys.path.insert(0, str(project_root))
     log_path = tmp_path / "app.log"
     monkeypatch.setenv("LOG_FILE", str(log_path))
 

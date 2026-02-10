@@ -1,8 +1,7 @@
 import logging
 
 from flask import Flask
-
-from src.routes.slack.slack_routes import register_slack_routes
+from src.routes.integrations_slack.slack_routes import register_slack_routes
 
 
 def test_register_slack_routes(caplog, mocker):

@@ -2,8 +2,7 @@ import logging
 
 from flask import jsonify, request
 from slack_bolt import App as SlackApp
-
-from src.slack.workflow_bridge import resume_workflow_after_action
+from src.slack_handlers.workflow_bridge import resume_workflow_after_action
 
 
 def register_slack_routes(app, slack_app: SlackApp, workflow):

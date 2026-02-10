@@ -7,7 +7,6 @@ from slack_bolt import App
 from slack_bolt.context.ack import Ack
 from slack_bolt.context.say import Say
 from slack_sdk.errors import SlackApiError
-
 from src.gmail.gmail_writer import GmailWriter
 
 

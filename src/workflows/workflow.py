@@ -3,13 +3,12 @@ import json
 import uuid
 from typing import Dict, List
 
-from openai import OpenAI
-
 from langgraph.graph import END, StateGraph
+from openai import OpenAI
 from src.gmail import GmailReader, GmailWriter
 from src.models.agent import GmailAgentState
 from src.models.gmail import EmailSummary
-from src.slack.draft_approval_handler import DraftApprovalHandler
+from src.slack_handlers.draft_approval_handler import DraftApprovalHandler
 
 from .state_manager import save_state_to_store
 
