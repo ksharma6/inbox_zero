@@ -1,6 +1,7 @@
 # Local files and API keys
 .DS_Store
 .env
+.inbox_zero.egg-info/
 .venv/
 demos/
 docdrafts/
