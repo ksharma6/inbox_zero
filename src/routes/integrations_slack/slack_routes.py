@@ -34,12 +34,11 @@ def register_slack_routes(app, slack_app: SlackApp, workflow):
     @app.route("/slack/events", methods=["POST"])
     def slack_events():
         logging.info("Received Slack event request")
-        logging.info("slack_events payload=%s", request.json)
 
         content_type = request.headers.get("Content-Type", "")
 
         if "application/json" in content_type and request.json:
-            logging.info("Processing JSON request: %s", request.json)
+            logging.info("slack_events payload=%s", request.json)
             if request.json.get("type") == "url_verification":
                 challenge = request.json.get("challenge", "")
                 return challenge
