@@ -1,11 +1,12 @@
 import uuid
 
 from flask import jsonify, request
-
-from src.langgraph.state_manager import (extract_langgraph_state,
-                                         load_state_from_store,
-                                         save_state_to_store)
 from src.models.agent import GmailAgentState
+from src.workflows.state_manager import (
+    extract_langgraph_state,
+    load_state_from_store,
+    save_state_to_store,
+)
 
 
 def register_flask_routes(app, workflow):

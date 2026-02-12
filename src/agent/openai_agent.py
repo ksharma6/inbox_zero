@@ -2,11 +2,10 @@ import json
 from typing import Callable, Dict
 
 from openai import OpenAI
-
-from src.gmail.GmailReader import GmailReader
-from src.gmail.GmailWriter import GmailWriter
+from src.gmail.gmail_reader import GmailReader
+from src.gmail.gmail_writer import GmailWriter
 from src.models.agent import AgentSchema, ProcessRequestSchema
-from src.slack.DraftApprovalHandler import DraftApprovalHandler
+from src.slack_handlers.draft_approval_handler import DraftApprovalHandler
 
 
 class Agent:
